@@ -7,7 +7,8 @@ game *Persian Gulf Inferno* (Innerprise, 1989) from your own copy of its disk. I
 at the original's 50 Hz and plays the original's graphics, sound and music. It can also run your own
 game from a *pack*: your own pictures, map, sounds, music and scripts.
 
-![A shootout in the original game, run by the engine](docs/images/shootout.png)
+<img src="docs/images/shootout.png" alt="A shootout in the original game, run by the engine" width="480">
+
 
 *A shootout on floor 7, run by the engine from a real disk image. The picture is the original
 game's artwork, shown here only to illustrate what the engine does; it belongs to its rights holders.*

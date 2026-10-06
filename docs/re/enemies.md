@@ -1,25 +1,25 @@
-# Fiender (`$508`, `$ACA`, op66–77)
+# Enemies (`$508`, `$ACA`, op66-77)
 
-Status: portat i `pkg/game/enemies.go` och skriptmotorn. Adresserna är hunk-relativa. Spårtesterna mot originalet (`trace_enemy_contact`, `trace_get_shot`, `trace_shoot_enemy`) stämmer steg för steg.
+Status: ported in `pkg/game/enemies.go` and the script engine. The addresses are hunk-relative. The trace tests against the original (`trace_enemy_contact`, `trace_get_shot`, `trace_shoot_enemy`) agree step by step.
 
-## Platser och aktörer
+## Slots and actors
 
-Spelaren är plats 0. Fienderna får plats 1–3 (aktörsdata `$8170 + $30*k`), hisskorgen och sprängladdningen delar plats 4. En fiende är en plats med ett skript, en position och en post (`+8`): fem skriptnummer (huvudskript, skript efter skott eller kontakt, två dödsskript, skadeskript) och träffpunkter (2).
+The player is slot 0. The enemies get slots 1 to 3 (actor data `$8170 + $30*k`), and the lift cabin and the explosive charge share slot 4. An enemy is a slot with a script, a position and a record (`+8`): five script numbers (main script, script after a shot or contact, two death scripts, hurt script) and hit points (2).
 
-## Spawnern (`$508`)
+## The spawner (`$508`)
 
-Körs före aktörsloopen varje bildruta och står stilla medan spelaren är på trappor (`$C34`).
+Runs before the actor loop every frame, and stands still while the player is on stairs (`$C34`).
 
-- **Utlösare.** Tabellen på `$A738` har en byte per ruta i nivåmatrisen (indexerad med `$4EE`). Bit 0 markerar en utlösare, bit 1 "laddad" (sätts vid start av `$496`, nollställs när den löser ut). Bitarna 2–6 väljer vad som följer efter första fienden.
-- **Första fienden** (`$522`): när spelaren står på en laddad ruta startas en fiende i första lediga plats från vänster eller höger kant av vyn, beroende på åt vilket håll spelaren tittar. Mallarna (24 byte: skript, sedan fiendeposten) ligger på `$5EF8`/`$5EC8` (första fienden höger/vänster) och `$5E80`/`$5E38` (vågor), och mallen växlar för varje fiende (`$C17`).
-- **Vågor.** Bitarna 2–5 väljer en av fyra väntelistor (3, 6, 8 eller 15 fiender till, med fördröjningar på 20–80 bildrutor); bit 6 startar en enda fiende. Nästa vågfiende (`$74E`) dyker upp när fördröjningen gått ut om blocket till höger om spelarens ruta tillåter det (bit 0 i `$A628`) och en plats är ledig. Spelaren som står stilla får en slumpad sida (`$C2C`).
+- **Triggers.** The table at `$A738` has one byte per cell in the level matrix (indexed with `$4EE`). Bit 0 marks a trigger, bit 1 "armed" (set at the start of `$496`, cleared when it fires). Bits 2 to 6 choose what follows the first enemy.
+- **The first enemy** (`$522`): when the player stands on an armed cell, an enemy is started in the first free slot from the left or right edge of the view, depending on which way the player faces. The templates (24 bytes: script, then the enemy record) are at `$5EF8`/`$5EC8` (first enemy right/left) and `$5E80`/`$5E38` (waves), and the template alternates for every enemy (`$C17`).
+- **Waves.** Bits 2 to 5 choose one of four waiting lists (3, 6, 8 or 15 more enemies, with delays of 20 to 80 frames); bit 6 starts a single enemy. The next wave enemy (`$74E`) appears when the delay has run out, if the block to the right of the player's cell allows it (bit 0 in `$A628`) and a slot is free. A player who stands still gets a random side (`$C2C`).
 
-## Kontakt (`$ACA`)
+## Contact (`$ACA`)
 
-En fiende utanför vyn tas bort (`$B74`). En fiende på skärmen sätter `$C1C` (blockerar trappor, hiss och dörrar, eftersom op40 struntar i "upp" då) och `$9A88` (stoppar bakgrundsmusiken). Kommer en fiende närmare än 32 pixlar fångar den spelaren: spelarens skript byts mot `$4E5A`/`$4EC4` och kontrollerna slutar.
+An enemy outside the view is removed (`$B74`). An enemy on the screen sets `$C1C` (blocks stairs, lift and doors, because op40 ignores "up" then) and `$9A88` (stops the background music). If an enemy comes closer than 32 pixels it catches the player: the player's script is replaced by `$4E5A`/`$4EC4` and the controls stop.
 
-## Skott
+## Shots
 
-- **Spelaren skjuter** (op68–71): närmaste levande aktör i plats 1–3 på den sidan, oavsett höjd, träffas. Hagelbössan (vapen 1) dödar direkt, annars minskas träffpunkterna och fienden byter till skadeskriptet. Vid noll dödas den och dödsskriptet startar. Skottet kostar en patron (op78: ur magasinet, ladda om från reserven eller gå till skriptets tomma gren).
-- **Fienden skjuter** (op76): om ingen annan fiende redan siktar sätts `$1BFC`. Spelarens skript (op66) tar skadan: hälsoräknaren `$1C05` minskar och blir 3 igen när en träff förloras (`$1C02`). Är träffarna slut dör spelaren. Räknaren startar på 0 (originalet sätter den aldrig), så första träffen kostar alltid en träff.
-- **Döda fiender** (op77) blir kvar i bildrutan: bobben ritas en sista gång utan att sparas och blir en del av bakgrunden, se `docs/re/foreground.md`.
+- **The player shoots** (op68-71): the nearest living actor in slots 1 to 3 on that side, at any height, is hit. The shotgun (weapon 1) kills at once, otherwise the hit points are reduced and the enemy changes to its hurt script. At zero it is killed and its death script starts. The shot costs a round (op78: from the magazine, reload from the reserve or go to the script's empty branch).
+- **The enemy shoots** (op76): if no other enemy is already aiming, `$1BFC` is set. The player's script (op66) takes the damage: the health counter `$1C05` goes down and becomes 3 again when a hit is lost (`$1C02`). If the hits have run out the player dies. The counter starts at 0 (the original never sets it), so the first hit always costs a hit.
+- **Dead enemies** (op77) stay in the frame: the bob is drawn one last time without being saved and becomes part of the background, see `docs/re/foreground.md`.

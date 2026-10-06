@@ -77,8 +77,7 @@ tools/          Python tools used to study the game, and to test against an emul
 The game logic was rewritten from descriptions of how the original behaves (`docs/re/`), not
 translated from its code. `go test ./...` runs the unit tests, and, if you have extracted a disk,
 a recorded playthrough of the whole game (72,642 ticks, all 28 rooms) that must end in a win with
-the same clock every time. The documentation is mostly in Swedish.
-
+the same clock every time.
 ## Game packs
 
 The engine can run with your own material in place of the original's. A **pack** is a directory

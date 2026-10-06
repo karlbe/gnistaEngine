@@ -1,22 +1,22 @@
-# Rum, dörrar och bomben (`$23CC`, `$2864`)
+# Rooms, doors and the bomb (`$23CC`, `$2864`)
 
-Status: portat i `pkg/game/rooms.go`. Rumsposterna och själva sekvensen är verifierade i emulatorn (`TestFirstDoor`, spelaren går första dörren). Rumsbilderna och meddelandena är original och läses vid körning.
+Status: ported in `pkg/game/rooms.go`. The room records and the sequence itself are verified in the emulator (`TestFirstDoor`, the player goes through the first door). The room pictures and the messages are the original's and are read at run time.
 
-## Dörrar
+## Doors
 
-Dörrar är tiles `$26`–`$28` (en tile, en dörr; 63 stycken i banan). Upp på en dörrtile anropar `$23CC` (`State.enterRoom`). Rummet slås upp via nivåmatrisens ruta för **vyns** blockposition (`$4EE`, inte spelarens): `$A9F4 + $4EE` ger ett rumsnummer, som pekar ut en post på 12 byte i `$ACAC`. Ruta för vyn och för spelaren sammanfaller i praktiken eftersom spelaren står 10 tiles in i vyn, men det är vyns ruta som gäller.
+Doors are tiles `$26`-`$28` (one tile, one door; 63 of them in the level). Up on a door tile calls `$23CC` (`State.enterRoom`). The room is looked up through the level matrix cell of the **view's** block position (`$4EE`, not the player's): `$A9F4 + $4EE` gives a room number, which points out a 12-byte record in `$ACAC`. The cell for the view and for the player coincide in practice because the player stands 10 tiles into the view, but it is the view's cell that counts.
 
-Rumsposten: `+0` lås (bitar ur kortbyten `$505`; vilket av dessa kort som helst öppnar), `+1` flaggor (bit 0–4 ett kort, bit 5 besökt, bit 6 vapen 2, bit 7 vapen 3), `+2..4` magasin per vapen, `+5` sprängladdningar, `+6` bild, `+7` meddelande, `+8` sprängd.
+The room record: `+0` lock (bits from the card byte `$505`; any one of these cards opens it), `+1` flags (bits 0-4 a card, bit 5 visited, bit 6 weapon 2, bit 7 weapon 3), `+2..4` magazines per weapon, `+5` explosive charges, `+6` picture, `+7` message, `+8` blown.
 
-- **Besökt rum** visas som tomt (bild 0, meddelande 0).
-- **Låst dörr** gör ingenting om spelaren saknar korten och dörren inte är sprängd. 36 av rummen har kortlås; bombrummet har låset `%100000`, som inget kort kan öppna, så dörren måste sprängas.
-- Rummet ger sina föremål (kort, vapen, magasin upp till 9, laddningar upp till 9), markeras som besökt och visar bilden och meddelandet. Första hjälpen (bild 5) fyller träffarna och markeras aldrig som besökt. Ned lämnar rummet.
-- Klockan, fiender och allt annat står stilla under besöket, eftersom originalet kör hela besöket inuti spelarens kontrollopkod.
+- **A visited room** is shown as empty (picture 0, message 0).
+- **A locked door** does nothing if the player lacks the cards and the door is not blown. 36 of the rooms have card locks; the bomb room has the lock `%100000`, which no card can open, so the door has to be blown.
+- The room gives its items (card, weapon, magazines up to 9, charges up to 9), is marked as visited and shows the picture and the message. First aid (picture 5) refills the hits and is never marked as visited. Down leaves the room.
+- The clock, the enemies and everything else stand still during the visit, because the original runs the whole visit inside the player's control opcode.
 
-## Sprängning
+## Blowing
 
-Mellanslag på en dörrtile (`$26`–`$29`) med laddningar kvar nedräknar laddningarna och startar skript 6: laddningen läggs ut (det tar ca 120 bildrutor) och sprängs kort därefter. Står spelaren kvar på laddningens ruta när den går av dör han (op74); annars sätts dörrens "sprängd"-byte och dörrbilden stämplas in som sprängd. Spelaren måste alltså gå undan direkt när lägganden är klar.
+Space on a door tile (`$26`-`$29`) with charges left counts the charges down and starts script 6: the charge is laid out (it takes about 120 frames) and goes off shortly after. If the player is still standing on the charge's cell when it goes off he dies (op74); otherwise the door's "blown" byte is set and the door picture is stamped in as blown. The player must therefore move away as soon as the laying is done.
 
-## Bomben
+## The bomb
 
-Bombrummet (bild 8) har en egen sekvens: fire lämnar rummet, mellanslag startar trådklippningen. Fyra trådar, en markör (`WireX`) och en inläsning av styrspaken var 50:e bildruta: höger och vänster flyttar markören, fire klipper. Den fjärde tråden (`wireGood` = 3, den gröna) desarmerar bomben och ger utfallet 3 (vinst); de andra ger utfallet 2 (explosion).
+The bomb room (picture 8) has a sequence of its own: fire leaves the room, space starts the wire cutting. Four wires, a marker (`WireX`) and one reading of the stick every 50 frames: right and left move the marker, fire cuts. The fourth wire (`wireGood` = 3, the green one) defuses the bomb and gives outcome 3 (win); the others give outcome 2 (explosion).

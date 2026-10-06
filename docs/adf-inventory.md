@@ -1,254 +1,254 @@
-# Inventering av originaldisketten (ADF)
+# Inventory of the original disk (ADF)
 
-Steg 1 för att undersöka en ren port från originalbinärerna. Underlaget är `assets-local/raw/*.adf`, uppackat med `go run ./cmd/extract` till `assets-local/adf/`. Underlaget är originalets, så det som läses ur det hålls lokalt i `assets-local/`.
+Step 1 in studying how to make a clean port from the original binaries. The source is `assets-local/raw/*.adf`, unpacked with `go run ./cmd/extract` into `assets-local/adf/`. The material is the original's, so what is read from it is kept locally in `assets-local/`.
 
-Status per fil: **Verifierat** betyder att formatet är tolkat med header eller chunk-struktur. **Hypotes** betyder att det är en gissning från byte-mönster och inte kontrollerat mot kod.
+Status per file: **Verified** means the format has been interpreted with a header or chunk structure. **Hypothesis** means it is a guess from byte patterns that has not been checked against code.
 
-## Disketten
+## The disk
 
-- Volymnamn `PGI`, OFS (bootblock `DOS\0`, flagga 0), 880 KB, 901 120 byte.
-- Enda startsteget är `s/startup-sequence`, som innehåller bara `ns`. Allt startas alltså från en enda binär.
-- Disketten har 33 filer, ca 565 KB data. Banor och grafik är uppdelade i separata filer som laddas från disk, och koden ligger i `ns`.
+- Volume name `PGI`, OFS (boot block `DOS\0`, flag 0), 880 KB, 901,120 bytes.
+- The only startup step is `s/startup-sequence`, which contains just `ns`. Everything is therefore started from a single binary.
+- The disk has 33 files, about 565 KB of data. Levels and graphics are divided into separate files that are loaded from disk, and the code is in `ns`.
 
-## Sammanfattning
+## Summary
 
-| Kategori | Filer | Format |
+| Category | Files | Format |
 |---|---|---|
-| Körbar | `ns` | AmigaOS hunk-binär, 68000 |
-| Helskärmsbilder | 11 st med tvåbokstavsnamn, `NSILoader`, `NSIMenu`, 10 st `NSIRoomN` | IFF ILBM, 320x200, 5 bitplan (32 färger) |
-| Spritebanker | `NSIBobs`, `NSIIcons` | IFF-liknande `FORM JBOB` (eget format) |
-| Ljud | `DAS`, `DBY`, `IAZ`, `NSISound`, `NSIMusicSound` | Rå 8-bitars-ljud med 6 byte header (hypotes) |
-| Speldata | `RoomData`, `NSIA` | Okänt eget format |
-| Font | `NSIAscii` | 256 tecken x 8 byte, 1 bitplan (hypotes, stark) |
-| System | `devs/system-configuration` | AmigaOS Preferences-struct (232 byte) |
+| Executable | `ns` | AmigaOS hunk binary, 68000 |
+| Full-screen pictures | 11, with two-letter names, `NSILoader`, `NSIMenu`, 10 `NSIRoomN` | IFF ILBM, 320x200, 5 bitplanes (32 colours) |
+| Sprite banks | `NSIBobs`, `NSIIcons` | IFF-like `FORM JBOB` (its own format) |
+| Sound | `DAS`, `DBY`, `IAZ`, `NSISound`, `NSIMusicSound` | Raw 8-bit sound with a 6-byte header (hypothesis) |
+| Game data | `RoomData`, `NSIA` | Unknown own format |
+| Font | `NSIAscii` | 256 characters x 8 bytes, 1 bitplane (hypothesis, strong) |
+| System | `devs/system-configuration` | AmigaOS Preferences struct (232 bytes) |
 
-## Körbar fil
+## The executable
 
-### `ns` (55 980 byte) — verifierat
+### `ns` (55,980 bytes): verified
 
-- Hunk-fil (`0x3F3`) med 2 hunkar:
-  - Hunk 0: CODE 47 816 byte, med 2 024 RELOC32-poster.
-  - Hunk 1: BSS 4 byte.
-- Ingen symboltabell och ingen debuginfo. Disassemblering blir alltså anonym, utan funktionsnamn.
-- Inga läsbara strängar i koden. Filnamn (`NSIRoom1` m.fl.) byggs troligen upp dynamiskt (t.ex. `NSIRoom` + nummer), så de syns inte som hela strängar. Filnamnen i diskettens rot är förmodligen det enda "API" som koden använder mot data.
-- Den är liten (47 KB kod) för ett helt spel, så den är hanterbar att disassemblera och porta.
-- Spelet nämner inte AmigaDOS-bibliotek i klartext. Det talar för att det skriver direkt mot hårdvaran (blitter, copper, Paula) och använder egen trackloader. Det måste bekräftas med disassemblering. Det påverkar porten starkt, eftersom hårdvarurelaterad kod måste ersättas.
+- A hunk file (`0x3F3`) with 2 hunks:
+  - Hunk 0: CODE 47,816 bytes, with 2,024 RELOC32 entries.
+  - Hunk 1: BSS 4 bytes.
+- No symbol table and no debug info. A disassembly is therefore anonymous, without function names.
+- No readable strings in the code. File names (`NSIRoom1` and so on) are probably built dynamically (for example `NSIRoom` + a number), so they do not show up as whole strings. The file names in the disk's root are probably the only "API" the code uses towards the data.
+- It is small (47 KB of code) for a whole game, so it is manageable to disassemble and port.
+- The game does not mention AmigaDOS libraries in clear text. That suggests that it writes directly to the hardware (blitter, copper, Paula) and uses its own track loader. This has to be confirmed by disassembly. It affects the port strongly, because the hardware-related code has to be replaced.
 
-## Helskärmsbilder, IFF ILBM — verifierat
+## Full-screen pictures, IFF ILBM: verified
 
-Alla är 320x200, 5 bitplan, mask=2 (transparent färg), komprimering 1 (ByteRun1), 32 färger i CMAP. De innehåller också chunkarna `DPPV` (Deluxe Paint-perspektiv, 104 byte) och 4 st `CRNG` (färgcykling). Färgcyklingen finns alltså i data och bör kunna återskapas i porten.
+All are 320x200, 5 bitplanes, mask=2 (transparent colour), compression 1 (ByteRun1), 32 colours in CMAP. They also contain the chunks `DPPV` (Deluxe Paint perspective, 104 bytes) and 4 `CRNG` (colour cycling). The colour cycling is thus in the data and should be possible to recreate in the port.
 
-| Fil | Storlek | Transparent färg | Tolkning (hypotes) |
+| File | Size | Transparent colour | Interpretation (hypothesis) |
 |---|---|---|---|
-| `NSILoader` | 25 910 | 0 | Laddnings-/titelbild |
-| `NSIMenu` | 6 736 | 0 | Menybild |
-| `NSIRoom1` | 14 848 | 0 | Bakgrund/rum 1 |
-| `NSIRoom5` | 10 594 | 0 | Rum 5 |
-| `NSIRoom9` | 12 932 | 13 | Rum 9 |
-| `NSIRoom10` | 12 932 | 0 | Rum 10 |
-| `NSIRoom11` | 13 264 | 13 | Rum 11 |
-| `NSIRoom12` | 12 924 | 0 | Rum 12 |
-| `NSIRoom13` | 11 986 | 0 | Rum 13 |
-| `NSIRoom14` | 14 946 | 0 | Rum 14 |
-| `NSIRoom15` | 11 026 | 0 | Rum 15 |
-| `BB` | 16 024 | 0 | Helskärmsbild |
-| `DO` | 4 280 | 2 | Helskärmsbild |
-| `EN` | 19 762 | 8 | Helskärmsbild |
-| `ET` | 4 560 | 0 | Helskärmsbild |
-| `EX` | 27 904 | 0 | Helskärmsbild |
-| `HC` | 12 876 | 0 | Helskärmsbild |
-| `IT` | 5 618 | 0 | Helskärmsbild |
-| `PF` | 2 884 | 0 | Helskärmsbild |
-| `ST` | 6 858 | 0 | Helskärmsbild |
-| `TA` | 8 338 | 0 | Helskärmsbild |
-| `WT` | 7 784 | 0 | Helskärmsbild |
+| `NSILoader` | 25,910 | 0 | Loading/title picture |
+| `NSIMenu` | 6,736 | 0 | Menu picture |
+| `NSIRoom1` | 14,848 | 0 | Background/room 1 |
+| `NSIRoom5` | 10,594 | 0 | Room 5 |
+| `NSIRoom9` | 12,932 | 13 | Room 9 |
+| `NSIRoom10` | 12,932 | 0 | Room 10 |
+| `NSIRoom11` | 13,264 | 13 | Room 11 |
+| `NSIRoom12` | 12,924 | 0 | Room 12 |
+| `NSIRoom13` | 11,986 | 0 | Room 13 |
+| `NSIRoom14` | 14,946 | 0 | Room 14 |
+| `NSIRoom15` | 11,026 | 0 | Room 15 |
+| `BB` | 16,024 | 0 | Full-screen picture |
+| `DO` | 4,280 | 2 | Full-screen picture |
+| `EN` | 19,762 | 8 | Full-screen picture |
+| `ET` | 4,560 | 0 | Full-screen picture |
+| `EX` | 27,904 | 0 | Full-screen picture |
+| `HC` | 12,876 | 0 | Full-screen picture |
+| `IT` | 5,618 | 0 | Full-screen picture |
+| `PF` | 2,884 | 0 | Full-screen picture |
+| `ST` | 6,858 | 0 | Full-screen picture |
+| `TA` | 8,338 | 0 | Full-screen picture |
+| `WT` | 7,784 | 0 | Full-screen picture |
 
-Anmärkningar:
+Remarks:
 
-- Rummen som finns är 1, 5 och 9–15. Rum 2–4 och 6–8 saknas på den här disketten. Antingen genereras de (se `RoomData`), eller så finns de på en annan diskett, eller så delas bilder mellan rum. `NSIRoom9` och `NSIRoom10` har samma storlek (12 932 byte) men olika `trans`, vilket tyder på nära släktskap.
-- De tvåbokstavsfilerna (`BB`, `DO`, `EN`, `ET`, `EX`, `HC`, `IT`, `PF`, `ST`, `TA`, `WT`) har oklar roll. De har samma ILBM-layout som rummen. Det är en öppen fråga om de är fasta skärmar, rumsbakgrunder eller något annat. Renderar vi dem till PNG avgörs det snabbt.
+- The rooms that exist are 1, 5 and 9-15. Rooms 2-4 and 6-8 are missing on this disk. Either they are generated (see `RoomData`), or they are on another disk, or pictures are shared between rooms. `NSIRoom9` and `NSIRoom10` have the same size (12,932 bytes) but different `trans`, which suggests a close relationship.
+- The two-letter files (`BB`, `DO`, `EN`, `ET`, `EX`, `HC`, `IT`, `PF`, `ST`, `TA`, `WT`) have an unclear role. They have the same ILBM layout as the rooms. Whether they are fixed screens, room backgrounds or something else is an open question. Rendering them to PNG settles it quickly.
 
-## Spritebanker, `FORM JBOB` — delvis verifierat
+## Sprite banks, `FORM JBOB`: partly verified
 
-- `NSIBobs` (109 428 byte) och `NSIIcons` (40 204 byte).
-- IFF-liknande container med chunkarna `BHDR` och `BODY`. Det är ett eget format, troligen från en Amiga-sprite/BOB-verktyg (Blitter Objects).
-- `BHDR` verkar vara en tabell med poster om 24 byte, med 4 tecken namn/tagg (`OTRL`, `WTRL`, `CTRL`). Det ger ca 649 poster i `NSIBobs` (15 576 / 24) och 362 i `NSIIcons` (8 688 / 24). Taggarna syns också i strängar som `Adr.Mask`.
-- Den första posten pekar på offset 0, och nästa post börjar vid 0x80. Det stämmer med 4 bitplan à 32 byte (16 rader x 16 pixlar). **Hypotes:** 16x16-sprites med planar data och en maskplan. Det måste bekräftas när vi skriver en konverterare.
-- Detta är spelets huvudgrafik, alltså spelare, fiender, bomber, gisslan och tiles.
+- `NSIBobs` (109,428 bytes) and `NSIIcons` (40,204 bytes).
+- An IFF-like container with the chunks `BHDR` and `BODY`. It is a format of its own, probably from an Amiga sprite/BOB tool (Blitter Objects).
+- `BHDR` seems to be a table of 24-byte records, with a 4-character name/tag (`OTRL`, `WTRL`, `CTRL`). That gives about 649 records in `NSIBobs` (15,576 / 24) and 362 in `NSIIcons` (8,688 / 24). The tags also show up in strings such as `Adr.Mask`.
+- The first record points at offset 0, and the next record starts at 0x80. That fits 4 bitplanes of 32 bytes each (16 rows x 16 pixels). **Hypothesis:** 16x16 sprites with planar data and a mask plane. This has to be confirmed when a converter is written.
+- This is the game's main graphics, that is, the player, enemies, bombs, hostages and tiles.
 
-## Ljud — hypotes
+## Sound: hypothesis
 
-Alla fem filerna börjar med samma mönster: en 32-bitars längd (big endian), ett 16-bitars ord, sedan data som ser ut som 8-bitars PCM (signerad, Paula-stil).
+All five files begin with the same pattern: a 32-bit length (big endian), a 16-bit word, then data that looks like 8-bit PCM (signed, Paula style).
 
-| Fil | Filstorlek | Längdfält | Ord efter längd | Notering |
+| File | File size | Length field | Word after the length | Note |
 |---|---|---|---|---|
-| `DAS` | 4 006 | 4 000 | `0x3E1C` | Kort effekt |
-| `DBY` | 2 006 | 2 000 | `0x396C` | Kort effekt |
-| `IAZ` | 5 006 | 5 000 | `0x3DB8` | Kort effekt |
-| `NSISound` | 82 806 | 82 800 | `0x2710` | Troligen en bank med flera effekter |
-| `NSIMusicSound` | 140 258 | 140 252 | `0x2710` | Troligen musik eller instrumentsamplingar |
+| `DAS` | 4,006 | 4,000 | `0x3E1C` | Short effect |
+| `DBY` | 2,006 | 2,000 | `0x396C` | Short effect |
+| `IAZ` | 5,006 | 5,000 | `0x3DB8` | Short effect |
+| `NSISound` | 82,806 | 82,800 | `0x2710` | Probably a bank of several effects |
+| `NSIMusicSound` | 140,258 | 140,252 | `0x2710` | Probably music or instrument samples |
 
-- Längdfältet + 6 = filstorleken i samtliga fall. Det är verifierat.
-- Ordet (`0x2710` = 10 000, de andra runt 14 700–15 900) är troligen samplingsfrekvens eller periodvärde. Det är inte bekräftat.
-- `NSISound` och `NSIMusicSound` börjar med nästan identiska bytes, men det kan vara en slump. Om de är banker med flera ljud behövs en indextabell som troligen ligger i `ns`.
+- The length field + 6 = the file size in all cases. That is verified.
+- The word (`0x2710` = 10,000, the others around 14,700-15,900) is probably a sample rate or a period value. That is not confirmed.
+- `NSISound` and `NSIMusicSound` begin with almost identical bytes, but that may be a coincidence. If they are banks with several sounds, an index table is needed, which is probably in `ns`.
 
-## Speldata
+## Game data
 
-### `RoomData` (20 480 byte) — okänt
+### `RoomData` (20,480 bytes): unknown
 
-- Exakt 20 KB = 20 x 1 024. Börjar med många upprepade `0x73`, som troligen är ett "tomt" tile/värde.
-- Låg entropi (4,45) och 31 % nollor. Det stämmer med tilemaps eller banlayout.
-- Det är den troligaste källan till banlayout, objektplaceringar (bomber, gisslan) och rumsövergångar. Hela filen ska tolkas, och det är kärnan i en port.
+- Exactly 20 KB = 20 x 1,024. Begins with many repeated `0x73`, which is probably an "empty" tile/value.
+- Low entropy (4.45) and 31 % zeros. That fits tile maps or a level layout.
+- It is the most likely source of the level layout, object placements (bombs, hostages) and room transitions. The whole file has to be interpreted, and it is the core of a port.
 
-### `NSIA` (10 072 byte) — okänt
+### `NSIA` (10,072 bytes): unknown
 
-- Börjar med `02 05 00 7f 40 04 00 04 01 e0 10 40 ...` följt av upprepade poster som `00 00 01 e0 08 36`. Mönstret med fasta 6 byte tyder på en lista med poster (t.ex. animations- eller objektdefinitioner).
-- Låg entropi (3,42). Rollen är oklar. Kan vara en animationsdefinition, en objektdefinition eller en tabell till `NSIBobs`.
+- Begins with `02 05 00 7f 40 04 00 04 01 e0 10 40 ...` followed by repeated records such as `00 00 01 e0 08 36`. The pattern of fixed 6 bytes suggests a list of records (for example animation or object definitions).
+- Low entropy (3.42). The role is unclear. It could be an animation definition, an object definition or a table for `NSIBobs`.
 
-### `NSIAscii` (2 048 byte) — hypotes, stark
+### `NSIAscii` (2,048 bytes): hypothesis, strong
 
-- Exakt 256 x 8 byte. Första glyfen (`ff 81 bd a5 a5 bd 81 ff`) är en ruta med mönster, alltså en 8x8-bitmapsfont. Antagligen en teckentabell som även innehåller grafiska tecken.
+- Exactly 256 x 8 bytes. The first glyph (`ff 81 bd a5 a5 bd 81 ff`) is a box with a pattern, that is, an 8x8 bitmap font. Probably a character table that also contains graphic characters.
 
 ## System
 
-### `devs/system-configuration` (232 byte) — verifierat
+### `devs/system-configuration` (232 bytes): verified
 
-- Storleken 232 byte är AmigaOS `struct Preferences`. Den innehåller bl.a. strängen `generic` (skrivarnamn) och inställningar för tangentbord och skärm. Den har ingen spelfunktion och behöver inte portas.
+- The size 232 bytes is the AmigaOS `struct Preferences`. It contains, among other things, the string `generic` (a printer name) and settings for the keyboard and screen. It has no game function and does not need to be ported.
 
-### `s/startup-sequence` (3 byte)
+### `s/startup-sequence` (3 bytes)
 
-- Innehåller `ns`. Det enda som startar spelet.
+- Contains `ns`. The only thing that starts the game.
 
-## Slutsatser för portbarheten
+## Conclusions for portability
 
-1. **Gynnsamt:** bara en binär (`ns`, 47 KB kod). Allt annat är data. Grafiken ligger som standardformat (IFF ILBM) som är enkelt att konvertera, och färgcyklingen finns i datat.
-2. **Medelsvårt:** spritebankerna (`JBOB`) och ljuden är egna format. Båda ser dock enkla ut, med planardata och rå PCM.
-3. **Största arbetet:** `RoomData` och `NSIA` samt hela spellogiken i `ns`. Banformat och objektdata måste tolkas, och logiken kräver en disassembly. Det saknas symboler, så det går via spårning av dataflöde mot filnamnen och sprite-index.
-4. **Risk:** om `ns` skriver direkt mot Amiga-hårdvaran (troligt) måste all ritning, ljud och input ersättas. Det är OK för en omskrivning i TypeScript där vi bara återskapar logiken, men det är inte en emulering av binären.
-5. **Alternativ till portning:** emulera hela binären i webbläsaren (WebAssembly-baserad Amiga-emulator med ADF). Det är betydligt enklare tekniskt men ger ingen "ren port" och löser inte rättighetsfrågan. Det passar inte kravet på egen kod.
+1. **Favourable:** only one binary (`ns`, 47 KB of code). Everything else is data. The graphics are in a standard format (IFF ILBM) that is easy to convert, and the colour cycling is in the data.
+2. **Medium difficulty:** the sprite banks (`JBOB`) and the sounds are formats of their own. Both look simple, though, with planar data and raw PCM.
+3. **The biggest work:** `RoomData` and `NSIA` and all the game logic in `ns`. The level format and the object data have to be interpreted, and the logic needs a disassembly. There are no symbols, so it goes by tracing data flow towards the file names and sprite indices.
+4. **Risk:** if `ns` writes directly to the Amiga hardware (likely) all drawing, sound and input has to be replaced. That is fine for a rewrite where we only recreate the logic, but it is not an emulation of the binary.
+5. **An alternative to porting:** emulate the whole binary in the browser (a WebAssembly-based Amiga emulator with the ADF). It is considerably easier technically but gives no "clean port" and does not solve the rights question. It does not meet the requirement of code of our own.
 
-## Öppna frågor / nästa steg
+## Open questions / next steps
 
-- Konvertera alla ILBM-filer till PNG och se vad de tvåbokstavsfilerna är.
-- Disassemblera `ns` (t.ex. med Ghidra, som har 68000-stöd och kan läsa Amiga-hunkar) och kartlägg de funktioner som läser in datafilerna.
-- Avkoda `JBOB` fullt ut och dumpa spritesheets till PNG.
-- Avkoda `RoomData` och `NSIA`.
-- Avgör om `NSISound` och `NSIMusicSound` är banker och hur de indexeras.
-- Gränsen för "ren port": en omskrivning som återskapar logiken, inte att köra originalbinären.
+- Convert all ILBM files to PNG and see what the two-letter files are.
+- Disassemble `ns` (for example with Ghidra, which has 68000 support and can read Amiga hunks) and map the functions that read in the data files.
+- Decode `JBOB` fully and dump sprite sheets to PNG.
+- Decode `RoomData` and `NSIA`.
+- Decide whether `NSISound` and `NSIMusicSound` are banks and how they are indexed.
+- The limit of "clean port": a rewrite that recreates the logic, not running the original binary.
 
-## Tillägg: vad bilderna visar (konverterade med `tools/ilbm2png.py`)
+## Addendum: what the pictures show (converted with `tools/ilbm2png.py`)
 
-Konverteringen skrevs till `assets-local/png/` (gitignored). De tvåbokstavsfilerna är **berättelse- och spelslutsskärmar**, inte rumsbakgrunder:
+The conversion was written to `assets-local/png/` (gitignored). The two-letter files are **story and game-over screens**, not room backgrounds:
 
-| Fil | Innehåll |
+| File | Contents |
 |---|---|
-| `NSILoader` | Titelbild med huvudkaraktärer och logotyp |
-| `PF` | "Tryck fire för att starta" |
-| `IT` | Intro: förutsättningen, ett terrorhot mot världens största oljereserv |
-| `EN` | Intro: transportplan och uppställd trupp |
-| `HC` | Intro: helikopter i silhuett |
-| `ST` | Berättelse efter kraschen, ankomst till riggen |
-| `WT` | Vinstskärm med epilog |
-| `DO` | Dödsskärm (text) |
-| `ET` | Slutskärm: explosion (text) |
-| `EX` | Game over: svampmoln |
-| `BB` | Bomb-avvecklingsskärm (diagram över bomben med ledningar, plus tänger) |
-| `TA` | Okänd grafik, färggrann siluett. Troligen en bild som bygger på färgcykling eller transparens |
-| `NSIMenu` | Spelets HUD (vapen, magasin, sprängladdningar, kort, våning, träffar, klocka) |
-| `NSIRoomN` | Rumsbilder i spelvyn, med en ram i nederkant för HUD. Spelet är alltså en **sidovy per rum**, inte isometriskt |
+| `NSILoader` | Title picture with main characters and a logo |
+| `PF` | "Press fire to start" |
+| `IT` | Intro: the premise, a terror threat against the world's largest oil reserve |
+| `EN` | Intro: a transport plane and a troop lined up |
+| `HC` | Intro: a helicopter in silhouette |
+| `ST` | Story after the crash, arrival at the rig |
+| `WT` | Win screen with an epilogue |
+| `DO` | Death screen (text) |
+| `ET` | End screen: explosion (text) |
+| `EX` | Game over: mushroom cloud |
+| `BB` | Bomb defusing screen (a diagram of the bomb with wires, plus pliers) |
+| `TA` | Unknown graphics, a colourful silhouette. Probably a picture that is based on colour cycling or transparency |
+| `NSIMenu` | The game's HUD (weapons, magazines, explosive charges, cards, floor, hits, clock) |
+| `NSIRoomN` | Room pictures in the game view, with a frame at the bottom for the HUD. The game is therefore a **side view per room**, not isometric |
 
-## Tillägg: sprite- och kartformat (verifierat med `tools/jbob2png.py` och `tools/levelmap2png.py`)
+## Addendum: sprite and map formats (verified with `tools/jbob2png.py` and `tools/levelmap2png.py`)
 
-**`JBOB` (NSIBobs, NSIIcons).** `BHDR` är en tabell med poster om 24 byte, big endian: `u32` bodyoffset, `u32` maskplansoffset, `u32` planstorlek, `u16` flaggor, `u16` bytebredd+2, `u16` höjd, `u16` bredd i ord, 4 tecken tagg. Färgplanen ligger i följd i `BODY` och maskplanet sist. Antalet färgplan är `(maskoffset - offset) / planstorlek`. Formatet är bekräftat eftersom alla 649 poster i `NSIBobs` uppfyller alla konsistenskontroller.
+**`JBOB` (NSIBobs, NSIIcons).** `BHDR` is a table of 24-byte records, big endian: `u32` body offset, `u32` mask plane offset, `u32` plane size, `u16` flags, `u16` byte width+2, `u16` height, `u16` width in words, a 4-character tag. The colour planes are in sequence in `BODY` and the mask plane last. The number of colour planes is `(mask offset - offset) / plane size`. The format is confirmed because all 649 records in `NSIBobs` pass all the consistency checks.
 
-- `NSIBobs`: 649 sprites, mest 16x16 med 3 plan (574 st), plus 27 st 32x38. Innehåller figurernas animationsbilder i många poser (gång, ligga, skjuta m.m.), samt hissar och dörrar.
-- `NSIIcons`: 240 giltiga poster, mest 16x16 med 3–4 plan. Det är kartans **tileset** (väggar, golv, trappor, rör, dörrar, möbler, föremål). Posterna 240–361 är identiska tomposter (`Adr.Mask`, tagg `CTRL`) och ska ignoreras.
-- Taggarna `OTRL`, `WTRL`, `CTRL` och `_TRL` är okända. Eventuellt anger de objekttyp.
-- Färgdjupet (3 plan = 8 färger) betyder att spritebankerna delar en palett med spelvyn, och att paletten inte ligger i filen. Den måste hämtas från rumsbilden eller koden.
+- `NSIBobs`: 649 sprites, mostly 16x16 with 3 planes (574), plus 27 of 32x38. It holds the figures' animation pictures in many poses (walking, lying, shooting and so on), and lifts and doors.
+- `NSIIcons`: 240 valid records, mostly 16x16 with 3-4 planes. It is the map's **tile set** (walls, floors, stairs, pipes, doors, furniture, objects). Records 240-361 are identical empty records (`Adr.Mask`, tag `CTRL`) and should be ignored.
+- The tags `OTRL`, `WTRL`, `CTRL` and `_TRL` are unknown. They may indicate the object type.
+- The colour depth (3 planes = 8 colours) means that the sprite banks share a palette with the game view, and that the palette is not in the file. It has to be taken from the room picture or the code.
 
-**`RoomData`.** *Rättelse:* första tolkningen (en tile-karta på 80 x 256) var fel. Filen är **256 block om 20 x 4 tiles** (80 byte per block, radvis, 1 byte per tile, index in i `NSIIcons`), alltså 320 x 64 pixlar per block. Blockens ordning i banan bestäms inte av filen utan av en separat kartmatris i `ns` (se nästa avsnitt).
+**`RoomData`.** *Correction:* the first interpretation (a tile map of 80 x 256) was wrong. The file is **256 blocks of 20 x 4 tiles** (80 bytes per block, row by row, 1 byte per tile, an index into `NSIIcons`), that is, 320 x 64 pixels per block. The order of the blocks in the level is not decided by the file but by a separate map matrix in `ns` (see the next section).
 
-## Tillägg: första disassembly av `ns` (`tools/disasm_hunk.py`, Capstone 5, 68000)
+## Addendum: the first disassembly of `ns` (`tools/disasm_hunk.py`, Capstone 5, 68000)
 
-Utdata skrivs till `assets-local/ns.asm` (gitignored, härledd från originalet).
+The output is written to `assets-local/ns.asm` (gitignored, derived from the original).
 
-- 47 816 byte kod gav 13 036 rader, varav 1 284 kunde inte avkodas. 3 380 `ori.b` är nästan säkert nollifylld **data inbäddad i kodhunken**, som linjär disassembly tolkar som kod. Hunken blandar kod och data, så en vanlig linjär disassembly räcker inte. Den behöver rekursiv traversering från kända ingångspunkter.
-- **Hårdvara direkt.** Koden skriver till custom-chipsen (`$DFF096` DMACON 22 gånger, `$DFF09A/9C` interrupts, ljudkanalerna `$DFF0A0–$DFF0D8`, Copper och bitplan-pekare) och till CIA (`$BFE001` joystick/eldknapp, `$BFD100` diskenhetsstyrning). Det är alltså en **trackloader med egen hårdvarukod**. Ritning, ljud och input måste skrivas om från grunden, och OS-anropen är få.
-- Ingångspunkten är en huvudloop på adress 0 som anropar sju initieringsrutiner och sedan växlar på ett tillståndsord på `$21EA` (1, 2, 3 = olika lägen, troligen intro, spel och slut). Spelstate ligger i absolut adresserad minnesdata (`$21EA`, `$7234`, `$7C5C`, `$9A88`), och `ns` har 2 024 relokeringar som pekar på dem.
-- Väntlooparna är räknarloopar (`subi.l #1,d0 / bne`), alltså **CPU-tidsberoende** och ska ersättas med riktiga timers.
+- 47,816 bytes of code gave 13,036 lines, of which 1,284 could not be decoded. 3,380 `ori.b` are almost certainly zero-filled **data embedded in the code hunk**, which linear disassembly interprets as code. The hunk mixes code and data, so an ordinary linear disassembly is not enough. It needs recursive traversal from known entry points.
+- **Hardware directly.** The code writes to the custom chips (`$DFF096` DMACON 22 times, `$DFF09A/9C` interrupts, the sound channels `$DFF0A0-$DFF0D8`, copper and bitplane pointers) and to the CIA (`$BFE001` joystick/fire button, `$BFD100` disk drive control). It is thus a **track loader with its own hardware code**. Drawing, sound and input have to be rewritten from scratch, and the OS calls are few.
+- The entry point is a main loop at address 0 that calls seven initialisation routines and then switches on a state word at `$21EA` (1, 2, 3 = different modes, probably intro, game and end). The game state is in absolutely addressed memory data (`$21EA`, `$7234`, `$7C5C`, `$9A88`), and `ns` has 2,024 relocations that point at them.
+- The wait loops are counter loops (`subi.l #1,d0 / bne`), so they depend on **CPU time** and should be replaced with real timers.
 
-**Hur väl går det att dekompilera?** Disassemblyn är ren och läsbar. Spellogiken ser ut att vara handskriven assembler utan kompilatorgenererad struktur, så en C-liknande dekompilering från Ghidra blir hjälpsam men ytlig. Den är ofta bra för kontrollflöde och datatillgång, men variabelnamn och typer måste vi sätta själva. Med 47 KB kod är det hanterbart. Rekommendation: rekursiv disassembly i Ghidra (kräver JDK 17+), sedan manuell kartläggning av tillståndsmaskinen, inputhanteringen och kartläsningen.
+**How well can it be decompiled?** The disassembly is clean and readable. The game logic appears to be hand-written assembler without compiler-generated structure, so a C-like decompilation from Ghidra will be helpful but shallow. It is often good for control flow and data access, but variable names and types we have to set ourselves. With 47 KB of code it is manageable. Recommendation: recursive disassembly in Ghidra (needs JDK 17+), then manual mapping of the state machine, the input handling and the map reading.
 
-## Tillägg: rekursiv disassembler i Python (`tools/recdis.py`), ingen Ghidra behövs
+## Addendum: a recursive disassembler in Python (`tools/recdis.py`), no Ghidra needed
 
-Skriptet följer språng och anrop från adress 0 och använder 2 024 relokeringar som extra ingångspunkter. Resultatet skrivs till `assets-local/ns_rec.asm` och täcker 64 % av koden (resten är data eller oanalyserad kod). Kod och data är nu åtskilda. 17 indirekta `jsr -n(a6)` är OS-bibliotekanrop som skriptet inte följer.
+The script follows jumps and calls from address 0 and uses the 2,024 relocations as extra entry points. The result is written to `assets-local/ns_rec.asm` and covers 64 % of the code (the rest is data or code that has not been analysed). Code and data are now separated. 17 indirect `jsr -n(a6)` are OS library calls that the script does not follow.
 
-Fynd:
+Findings:
 
-- **Filnamn finns som klartext** i datadelen, med `df0:`-prefix: `NSIascii`, `RoomData`, `NSISound`, `IAZ`, `DAS`, `DBY`, `NSIBobs`, `NSIIcons`, `NSIMenu`, `NSIRoom1/5/9–15`, `BB`, `HK`, `NSILoader`, `ST`, `WT`, `DO`, `ET`, `EX`, `EN`, `HC`, `IT`, `TA`, `PF`, `NSIA`, `NSIMusicSound`. Alla finns på disketten **utom `HK`**, så den filen refereras men saknas här. Rum 2–4 och 6–8 refereras aldrig, så spelet har bara de 11 rumsbakgrunderna.
-- **Bibliotek:** `graphics.library`, `dos.library` och `intuition.library`. Filerna läses via DOS (`jsr -$1e/-$24/-$2a(a6)` = Open/Close/Read). Ritning och ljud går ändå direkt mot hårdvaran.
-- **Spelets utfall** ligger i ordet `$21EA`. Det är 0 medan spelet pågår. 1, 2 och 3 laddar `DO` (död), `ET` (slut: explosion) respektive `WT` (vinst). Det motsvarar skärmarna jag såg i bilderna.
-- Kodens datastrukturer ligger i absolut adresserad data, så porten får bygga ett eget spelstate i stället för att återskapa minneslayouten.
+- **File names exist as clear text** in the data part, with a `df0:` prefix: `NSIascii`, `RoomData`, `NSISound`, `IAZ`, `DAS`, `DBY`, `NSIBobs`, `NSIIcons`, `NSIMenu`, `NSIRoom1/5/9-15`, `BB`, `HK`, `NSILoader`, `ST`, `WT`, `DO`, `ET`, `EX`, `EN`, `HC`, `IT`, `TA`, `PF`, `NSIA`, `NSIMusicSound`. All are on the disk **except `HK`**, so that file is referred to but missing here. Rooms 2-4 and 6-8 are never referred to, so the game only has the 11 room backgrounds.
+- **Libraries:** `graphics.library`, `dos.library` and `intuition.library`. The files are read through DOS (`jsr -$1e/-$24/-$2a(a6)` = Open/Close/Read). Drawing and sound still go directly to the hardware.
+- **The game's outcome** is in the word `$21EA`. It is 0 while the game is on. 1, 2 and 3 load `DO` (death), `ET` (end: explosion) and `WT` (win) respectively. That corresponds to the screens I saw in the pictures.
+- The code's data structures are in absolutely addressed data, so the port builds a game state of its own instead of recreating the memory layout.
 
-## Tillägg: kartmatrisen i koden (verifierat, `tools/levelmap2png.py`)
+## Addendum: the map matrix in the code (verified, `tools/levelmap2png.py`)
 
-Banan ligger **inte** i någon datafil. Den är en statisk bytematris inbyggd i kodhunken i `ns`, och `RoomData` är bara ett bibliotek av block som matrisen pekar ut. Adresserna nedan är hunk-relativa (filoffset = adress + 36).
+The level is **not** in any data file. It is a static byte matrix built into the code hunk of `ns`, and `RoomData` is only a library of blocks that the matrix points out. The addresses below are hunk-relative (file offset = address + 36).
 
-**Matrisen**
+**The matrix**
 
-| Egenskap | Värde |
+| Property | Value |
 |---|---|
-| Adress | `$A333` (filoffset 41 815) |
-| Format | 1 byte per cell, radvis. Cellen är ett **block-ID** (0–255) |
-| Radlängd (stride) | **29** celler. Värdet ligger i ordet `$910E` |
-| Antal rader | **26**. Värdet ligger i ordet `$9110`. *Rättelse:* först antogs 208 rader (till hunkens slut), men efter rad 26 (`$A5A5`) följer andra tabeller |
-| Efter matrisen | Från `$A5A5` en tabell med samma bredd och nästan bara 0/1. **Hypotes:** en flagga per block (t.ex. tänt/besökt). Därefter fler tabeller med annan struktur |
-| ID 0 | Tomt block, som ritas som bakgrund |
+| Address | `$A333` (file offset 41,815) |
+| Format | 1 byte per cell, row by row. The cell is a **block id** (0-255) |
+| Row length (stride) | **29** cells. The value is in the word `$910E` |
+| Number of rows | **26**. The value is in the word `$9110`. *Correction:* 208 rows (to the end of the hunk) was assumed at first, but after row 26 (`$A5A5`) other tables follow |
+| After the matrix | From `$A5A5` a table with the same width and almost only 0/1. **Hypothesis:** a flag per block (for example lit/visited). Then more tables with another structure |
+| Id 0 | An empty block, drawn as background |
 
-**Block.** Ett ID `n` pekar på `RoomData[n * 80 .. n * 80 + 79]`. Det är 20 x 4 tiles, radvis (20 byte per rad, 4 rader), och varje tile är ett index i `NSIIcons` (16x16 pixlar). Ett block är alltså 320 x 64 pixlar. Det är en skärmbredd av en våning, vilket stämmer med att våningarna ligger 64 pixlar isär i spelet. Konstanterna ligger i data: `$9112`=20 (bredd), `$9114`=4 (höjd), `$9116`=80 (byte per block).
+**Blocks.** An id `n` points at `RoomData[n * 80 .. n * 80 + 79]`. That is 20 x 4 tiles, row by row (20 bytes per row, 4 rows), and each tile is an index into `NSIIcons` (16x16 pixels). A block is therefore 320 x 64 pixels. It is one screen width of one floor, which fits the floors being 64 pixels apart in the game. The constants are in data: `$9112`=20 (width), `$9114`=4 (height), `$9116`=80 (bytes per block).
 
-**Hela banan** är 29 x 26 block, alltså 9 280 x 1 664 pixlar. I tvärsnitt består den av tre byggnader av olika höjd som förbinds av en marknivå, med våningar, trappor, hissar och rum. Visa den med `go run ./cmd/viewer` (zooma ut med mushjulet).
+**The whole level** is 29 x 26 blocks, that is, 9,280 x 1,664 pixels. In cross-section it consists of three buildings of different heights joined by a ground level, with floors, stairs, lifts and rooms. Show it with `go run ./cmd/viewer` (zoom out with the mouse wheel).
 
-**Hur koden ritar** (rutinen `$8DE0`, med hjälprutinen `$8E50`):
+**How the code draws** (the routine `$8DE0`, with the helper routine `$8E50`):
 
-1. Kartpositionen räknas om från pixlar till block i `$8EDA`. `$8F56` (x) och `$8F58` (y) är vyns pixelposition. Den delas med blockstorleken (320 respektive 64) och ger blockkolumn `$8F72`, blockrad `$8F74` och en återstående tile-offset `$8F76`.
-2. `$8DE0` beräknar adressen i matrisen: `$A333 + $8F72 + $8F74 * $910E`.
-3. Den läser block-ID:n för ett fönster på 3 x 4 block (`$94D8`=3, `$94DA`=4) och anropar `$8E50` för varje.
-4. `$8E50` kopierar blockets 4 rader a 20 tiles från `RoomData` (pekaren `$94E6`, 20 480 byte) till en **tilebuffer** som är 60 tiles bred (`$94DC`=60, alltså 3 block) och 16 tiles hög. Bufferten används för scrollning. Skärmen visar 20 tiles åt gången.
-5. Tilebufferten ritas sedan till skärmen med blittern (se rutinen vid `$8D9C`, som skriver till `$DFF040–$DFF058`).
+1. The map position is converted from pixels to blocks at `$8EDA`. `$8F56` (x) and `$8F58` (y) are the view's pixel position. It is divided by the block size (320 and 64) and gives block column `$8F72`, block row `$8F74` and a remaining tile offset `$8F76`.
+2. `$8DE0` calculates the address in the matrix: `$A333 + $8F72 + $8F74 * $910E`.
+3. It reads the block ids for a window of 3 x 4 blocks (`$94D8`=3, `$94DA`=4) and calls `$8E50` for each.
+4. `$8E50` copies the block's 4 rows of 20 tiles from `RoomData` (the pointer `$94E6`, 20,480 bytes) to a **tile buffer** that is 60 tiles wide (`$94DC`=60, that is, 3 blocks) and 16 tiles high. The buffer is used for scrolling. The screen shows 20 tiles at a time.
+5. The tile buffer is then drawn to the screen with the blitter (see the routine at `$8D9C`, which writes to `$DFF040-$DFF058`).
 
-**Startposition.** Vid `$03A0` sätts `$8F56`=7984 och `$8F58`=1360. Det motsvarar blockkolumn 24 och blockrad 21 (7984 / 320 = 24,95 och 1360 / 64 = 21,25). Det är troligen spelarens startvy, men det är ännu inte kontrollerat mot screenshoten.
+**Start position.** At `$03A0`, `$8F56`=7984 and `$8F58`=1360 are set. That corresponds to block column 24 and block row 21 (7984 / 320 = 24.95 and 1360 / 64 = 21.25). It is probably the player's starting view, but it has not yet been checked against the screenshot.
 
-**Ännu okänt**
-- Vad ordet `$9110` (=26) betyder. Det ligger bredvid stride-värdet och kan vara synlig bredd eller en kartgräns.
-- Vilka ID som bara är dekor och vilka som är hissar, dörrar eller trappor. Kollision och interaktion kräver förmodligen en egen tabell, eftersom block bara innehåller tile-ID.
-- Var bomber, gisslan och fiender placeras. De ligger inte i matrisen, och `NSIA` är ett av de möjliga ställena.
-- Paletten. Screenshoten har en 16-färgs gameplaypalett (plus 2 extra) där ordningen skiljer sig från rumsbildernas CMAP. Jag använder screenshotens palett för tilesen, och färgerna i kartan ser rimliga ut. Var spelet själv sätter paletten är inte kartlagt.
+**Still unknown**
+- What the word `$9110` (=26) means. It is next to the stride value and could be the visible width or a map limit.
+- Which ids are only decoration and which are lifts, doors or stairs. Collision and interaction probably need a table of their own, because blocks only contain tile ids.
+- Where bombs, hostages and enemies are placed. They are not in the matrix, and `NSIA` is one of the possible places.
+- The palette. The screenshot has a 16-colour gameplay palette (plus 2 extra) where the order differs from the room pictures' CMAP. I use the screenshot's palette for the tiles, and the colours in the map look reasonable. Where the game itself sets the palette has not been mapped.
 
-Rumsbilderna är sidovyer med bakgrund och karaktär, i ett spel med rum, dörrar och hissar. Spelet är alltså en sidovy, inte isometriskt.
+The room pictures are side views with a background and a character, in a game with rooms, doors and lifts. The game is therefore a side view, not isometric.
 
-## Tillägg: skärm, palett och hur tiles ritas (verifierat mot emulatorn)
+## Addendum: screen, palette and how tiles are drawn (verified against the emulator)
 
-Verifierat genom att läsa copperlistan och skärmens bitplan ur chip-RAM i WinUAE (`tools/uae/uaectl.py`), med start från savestate i spelläge.
+Verified by reading the copper list and the screen's bitplanes from chip RAM in WinUAE (`tools/uae/uaectl.py`), starting from a savestate in game mode.
 
-**Skärmen i spelläge** (copperlistan ligger på `$FB6C` i chip-RAM i den körningen):
+**The screen in game mode** (the copper list is at `$FB6C` in chip RAM in that run):
 
-- `BPLCON0=$4000`: **4 bitplan**, ett playfield, 16 färger. Copperlistan sätter 6 planpekare, men bara 4 används.
-- Planen är 46 byte breda per rad (`DDFSTRT=$30`, `DDFSTOP=$D0` ger 42 byte, plus modulo 4), alltså 368 pixlar. Den extra bredden används för mjukscrollning (`BPLCON1`).
-- Spelvyn har en palett med 16 färger (de övriga 16 registren är 0). På rad 172 byter copperlistan planpekare och palett för HUD:en.
+- `BPLCON0=$4000`: **4 bitplanes**, one playfield, 16 colours. The copper list sets 6 plane pointers, but only 4 are used.
+- The planes are 46 bytes wide per row (`DDFSTRT=$30`, `DDFSTOP=$D0` give 42 bytes, plus a modulo of 4), that is, 368 pixels. The extra width is used for soft scrolling (`BPLCON1`).
+- The game view has a palette with 16 colours (the other 16 registers are 0). On line 172 the copper list changes the plane pointers and the palette for the HUD.
 
-**Paletter.** Spelet har 7 palettabeller om 32 färger (12-bitars `$0RGB`) i kodhunken: `$7256`, `$72D6`, `$7316`, `$7356`, `$7396`, `$73D6`, `$7416`. Den aktiva sätts med `move.l #tabell,$7234.l`, och rutinen `$723C` bygger copperlistans `COLOR00–31`. Spelläget använder `$7256` (sätts på `$6950`). Ordningen är densamma som i rumsbildernas CMAP. WinUAE:s egna PNG-skärmbilder sorterar om paletten, så de går inte att använda som källa för index.
+**Palettes.** The game has 7 palette tables of 32 colours (12-bit `$0RGB`) in the code hunk: `$7256`, `$72D6`, `$7316`, `$7356`, `$7396`, `$73D6`, `$7416`. The active one is set with `move.l #table,$7234.l`, and the routine `$723C` builds the copper list's `COLOR00-31`. The game mode uses `$7256` (set at `$6950`). The order is the same as in the room pictures' CMAP. WinUAE's own PNG screenshots reorder the palette, so they cannot be used as a source for indices.
 
-**Tiles ritas med en planmask** (rutinen `$8D66`, anropad per tile från `$8D32`):
+**Tiles are drawn with a plane mask** (the routine `$8D66`, called per tile from `$8D32`):
 
-1. Tile-ID x 24 ger tilens `BHDR`-post i `NSIIcons`. Tile-ID:t är alltså direkt ett postnummer.
-2. Datapekaren är postens bodyoffset plus `BODY`-basen.
-3. `d7` = **postens byte 20, alltså första tecknet i "taggen"**. Det är en planmask, inte ett namn.
-4. För skärmplan 0–3: om bit *p* i masken är satt kopieras tilens nästa lagrade 32-byteplan (16 rader x 1 ord) till skärmplan *p*. Annars töms planet.
-5. Blittern skriver hela rutan utan mask, så map-tiles är **ogenomskinliga**.
+1. Tile id x 24 gives the tile's `BHDR` record in `NSIIcons`. The tile id is thus directly a record number.
+2. The data pointer is the record's body offset plus the `BODY` base.
+3. `d7` = **the record's byte 20, that is, the first character of the "tag"**. It is a plane mask, not a name.
+4. For screen planes 0-3: if bit *p* in the mask is set, the tile's next stored 32-byte plane (16 rows x 1 word) is copied to screen plane *p*. Otherwise the plane is cleared.
+5. The blitter writes the whole square without a mask, so map tiles are **opaque**.
 
-Taggarna som förekommer: `'W'`=`$57` (plan 0–2), `'_'`=`$5F` (plan 0–3), `'O'`=`$4F` (plan 0–3), `'C'`=`$43` (plan 0–1), `'D'`=`$44` (bara plan 2), `'@'`=`$40` (inga plan, alltså färg 0). Samma lagrade data kan alltså ge olika färger beroende på masken. Det förklarar varför samma motiv ser grått ut i korridorer och blått i rum.
+The tags that occur: `'W'`=`$57` (planes 0-2), `'_'`=`$5F` (planes 0-3), `'O'`=`$4F` (planes 0-3), `'C'`=`$43` (planes 0-1), `'D'`=`$44` (plane 2 only), `'@'`=`$40` (no planes, that is, colour 0). The same stored data can thus give different colours depending on the mask. That explains why the same motif looks grey in corridors and blue in rooms.
 
-Med den här modellen stämmer 98,5 % av pixlarna i spelvyn mot emulatorns skärm. Resten är sprites (figuren m.m.), som ritas ovanpå. Spelvyns vänsterkant ligger 16 pixlar till höger om vypositionen i `$8F56` (den extra scrollkolumnen).
+With this model 98.5 % of the pixels in the game view agree with the emulator's screen. The rest is sprites (the figure and so on), which are drawn on top. The game view's left edge is 16 pixels to the right of the view position in `$8F56` (the extra scroll column).
 
-**Hypotes:** spritebankens första taggbyte (t.ex. `'O'` i `NSIBobs`) fungerar troligen på samma sätt för figurer, men de ritas med en annan rutin och mask. Det är inte verifierat. `pkg/amiga` avkodar därför bobs med den gamla tolkningen (färgplan + maskplan), och tiles via `Bank.Tile`.
+**Hypothesis:** the sprite bank's first tag byte (for example `'O'` in `NSIBobs`) probably works the same way for figures, but they are drawn with another routine and mask. That has not been verified. `pkg/amiga` therefore decodes bobs with the old interpretation (colour planes + mask plane), and tiles through `Bank.Tile`.

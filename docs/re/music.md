@@ -1,41 +1,41 @@
-# Musiken (`$96DE`, `$94EA`, `$95EA`)
+# The music (`$96DE`, `$94EA`, `$95EA`)
 
-Status: portad i `pkg/audio/music.go`. Spelarens logik är läst ur koden och testad mot de riktiga filerna (antal mönster, notstarter, slut). Ljudet är **inte jämfört med originalet på gehör**.
+Status: ported in `pkg/audio/music.go`. The player's logic is read from the code and tested against the real files (number of patterns, note starts, the end). The sound has **not been compared with the original by ear**.
 
-## Vad som kör vad
+## What runs what
 
-Spelet har två avbrott på samma vektor (`$6C`, rutinen `$7566`): copper-avbrottet kör spelets bildruta, och vertikal-blank-avbrottet (`$75C8`) kör musikens tick (`$96DE`) 50 gånger i sekunden, om inte bit 0 i `$9A88` är satt. Den biten betyder "låten är slut" eller "stoppad av spelet".
+The game has two interrupts on the same vector (`$6C`, routine `$7566`): the copper interrupt runs the game's frame, and the vertical blank interrupt (`$75C8`) runs the music's tick (`$96DE`) 50 times a second, unless bit 0 of `$9A88` is set. That bit means "the song is over" or "stopped by the game".
 
-## Filerna
+## The files
 
-| Fil | Innehåll |
+| File | Contents |
 |---|---|
-| `NSIA` (10 072 byte) | låten: 6-bytesposter ("händelser"), 100 mönster, fyra ordningslistor |
-| `NSIMusicSound` | titellåtens instrument: tio samplingar |
-| `IAZ`, `DAS`, `DBY` | de tre korta samplingar som bakgrundsspåret i spelet använder |
+| `NSIA` (10,072 bytes) | the song: 6-byte records ("events"), 100 patterns, four order lists |
+| `NSIMusicSound` | the title song's instruments: ten samples |
+| `IAZ`, `DAS`, `DBY` | the three short samples that the background track in the game uses |
 
 ## NSIA
 
-Från början ligger händelserna (6 byte vardera, upp till `$2328`): flaggbyte, instrument, period (u16), längd i rader, volym. Ett mönster är en följd av händelser och slutar med den första vars flaggbyte är exakt 2 (`$9B5C`); den händelsen spelas också. Därefter kommer fyra ordningslistor på 156 byte vardera (en per stämma, från `$24B8`), där varje byte är ett mönsternummer och `$FF` avslutar. Alla fyra är 16 poster långa.
+The events come first (6 bytes each, up to `$2328`): flag byte, instrument, period (u16), length in rows, volume. A pattern is a run of events and ends with the first one whose flag byte is exactly 2 (`$9B5C`); that event is played too. Then come four order lists of 156 bytes each (one per voice, from `$24B8`), where each byte is a pattern number and `$FF` ends the list. All four are 16 entries long.
 
-## Spelaren
+## The player
 
-- Varje stämma har en nedräknare (`$9A82`–`$9A85`, startvärde 1), en pekare till nästa händelse och en position i sin ordningslista.
-- Spelaren går ett steg (en "rad") var femte tick. Räknaren `$9A87` går 4, 3, 2, 1, 0.
-- En stämma som inte är avstängd (`$9A89`) räknar ned sin not, eller startar nästa när nedräknaren är 1: DMA för kanalen stängs av, pekare, längd och period sätts från instrumenttabellen och händelsen, volymen sätts (värdet 4 betyder 0), nedräknaren laddas med notens längd och stämman markeras i `$9A86`.
-- Vid nästa tick slår `$96DE` på DMA för de markerade stämmorna och sätter längden till 1 ord, så varje not spelas **en gång** och tystnar. (Samma tvåsteg som ljudeffekterna.)
-- En händelse med flagga 2 flyttar stämman till nästa mönster i ordningslistan. Stämma 0 och 3 kontrollerar `$FF`: då är låten slut (`$97F0`). Slutar den titellåten sätts `$9A88` bit 0. Slutar bakgrundsspåret startar det om.
+- Each voice has a countdown (`$9A82`-`$9A85`, start value 1), a pointer to the next event and a position in its order list.
+- The player takes a step (a "row") every fifth tick. The counter `$9A87` goes 4, 3, 2, 1, 0.
+- A voice that is not switched off (`$9A89`) counts down its note, or starts the next one when the countdown is 1: DMA for the channel is switched off, pointer, length and period are set from the instrument table and the event, the volume is set (the value 4 means 0), the countdown is loaded with the note's length and the voice is marked in `$9A86`.
+- At the next tick `$96DE` switches on DMA for the marked voices and sets the length to 1 word, so each note is played **once** and goes quiet. (The same two steps as the sound effects.)
+- An event with flag 2 moves the voice to the next pattern in the order list. Voices 0 and 3 check for `$FF`: then the song is over (`$97F0`). If it is the title song, `$9A88` bit 0 is set. If it is the background track, it starts over.
 
-## Titellåten (`$94EA`)
+## The title song (`$94EA`)
 
-Startar när logotypen är färdig (`$66FC`) och går i 96 sekunder. Titeln väntar på att den tar slut (`$67C4`) innan "press fire" visas. Stämmorna börjar alla på första mönstret i sina listor. Instrumenten är de tio i `NSIMusicSound`, och tabellen byggs av `$9C52` (ett förskjutningsvärde och en längd i ord var; den sista sampling-längden är 2 byte längre än filen, vilket originalet också läser förbi).
+Starts when the logo is done (`$66FC`) and runs for 96 seconds. The title waits for it to end (`$67C4`) before "press fire" is shown. The voices all start at the first pattern in their lists. The instruments are the ten in `NSIMusicSound`, and the table is built by `$9C52` (an offset and a length in words each; the last sample's length is 2 bytes longer than the file, which the original also reads past).
 
-## Bakgrundsspåret i spelet (`$95EA`)
+## The background track in the game (`$95EA`)
 
-Anropas när ett spel börjar (`$2A`). Stämma 0 och 1 stängs av (`$9A89` = 3). Stämma 2 och 3 börjar på position 18 i sina ordningslistor, med instrumenttabellen utbytt mot IAZ, DAS och DBY (längderna 2500, 2000 och 1000 ord). När det tar slut startar det om (`$9A8A`).
+Called when a game begins (`$2A`). Voices 0 and 1 are switched off (`$9A89` = 3). Voices 2 and 3 start at position 18 in their order lists, with the instrument table replaced by IAZ, DAS and DBY (lengths 2500, 2000 and 1000 words). When it ends it starts over (`$9A8A`).
 
-Fiendekontrollen (`$ACA`) nollställer `$9A88` i början av varje bildruta och sätter den igen så länge en fiende syns på skärmen, så bakgrundsspåret spelar bara när ingen fiende syns. Spelet stoppar det helt när spelet är slut (`$3A`). I rum och under paus kör inte avbrotten och därmed inte musiken.
+The enemy check (`$ACA`) clears `$9A88` at the start of every frame and sets it again as long as an enemy is visible on the screen, so the background track only plays when no enemy is visible. The game stops it altogether when the game is over (`$3A`). In rooms and during pause the interrupts do not run, and so neither does the music.
 
-## Porten
+## The port
 
-`audio.Tracker` är en ren tillståndsmaskin som styr fyra röster (`Voices`): `LoadEntry` motsvarar registerskrivningarna med DMA av och `Start` slår på DMA. `Mixer` implementerar `Voices`. `cmd/game` anropar `Tick` en gång per bildruta (titeln och spelet). Utan ljudenhet används `audio.Silent`, så titelns väntan på låtens slut fungerar ändå.
+`audio.Tracker` is a pure state machine that drives four voices (`Voices`): `LoadEntry` corresponds to the register writes with DMA off and `Start` switches DMA on. `Mixer` implements `Voices`. `cmd/game` calls `Tick` once per frame (the title and the game). Without a sound device `audio.Silent` is used, so the title's wait for the end of the song works anyway.

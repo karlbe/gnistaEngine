@@ -1,33 +1,33 @@
-# Ljudeffekter
+# Sound effects
 
-Status: effekterna är portade (`pkg/audio`). Musiken (`NSIMusicSound`, rutinerna runt `$96F4–$9A32`) är inte kartlagd eller portad.
+Status: the effects are ported (`pkg/audio`). The music is described in `docs/re/music.md`.
 
-## Effekttabellen (`$6432`) — verifierat
+## The effect table (`$6432`): verified
 
-20 poster à 10 byte: datapekare (4), längd i **ord** (2), Paula-period (2), volym (1), fyllnad. Tabellen är nollad i filen och byggs vid start av `$61B0–$6430`. Alla datapekare pekar i `NSISound`-filens data (efter 6-byteshuvudet, `$64FA` + 6) plus en offset. Offseterna kedjar sig i filen (post 1 börjar där post 0 slutar), vilket bekräftar att längden är i ord. Porten tolkar rutinen vid körning (`audio.ParseTable`) i stället för att kopiera tabellen.
+20 records of 10 bytes: data pointer (4), length in **words** (2), Paula period (2), volume (1), padding. The table is zeroed in the file and built at start-up by `$61B0-$6430`. All data pointers point into the data of the `NSISound` file (after the 6-byte header, `$64FA` + 6) plus an offset. The offsets chain in the file (record 1 starts where record 0 ends), which confirms that the length is in words. The port interprets the routine at run time (`audio.ParseTable`) instead of copying the table.
 
-Samplingstakt = 3 546 895 / period (PAL). Volym 0–64.
+Sample rate = 3,546,895 / period (PAL). Volume 0 to 64.
 
-| Id | Används av | Anmärkning |
+| Id | Used by | Remark |
 |---|---|---|
-| 0, 4 | Skott (op78 på kanal 0) | samma data, olika period |
-| 11–13 | Fotsteg (op79-listan `$20C2`) | kanal 0 |
-| 16–18 | Trappsteg (op80-listan `$2114`) | kanal 0 |
-| 5–10, 19 | Op82/83/84 (kanal 1–3) | rop, död, explosion m.m.; exakt vem som är vem är **hypotes** |
-| 14, 15 | Hissen (op82 + op89 / op86) | 14 loopar, 15 avslutar |
+| 0, 4 | Shots (op78 on channel 0) | the same data, different period |
+| 11-13 | Footsteps (the op79 list `$20C2`) | channel 0 |
+| 16-18 | Stair steps (the op80 list `$2114`) | channel 0 |
+| 5-10, 19 | Op82/83/84 (channels 1 to 3) | shouts, death, explosion and so on; exactly which is which is a **hypothesis** |
+| 14, 15 | The lift (op82 + op89 / op86) | 14 loops, 15 ends |
 
-## Kanaler och uppspelning — verifierat ur koden, uppspelningsbeteendet är tolkat
+## Channels and playback: verified from the code, the playback behaviour is interpreted
 
-Skripten styr Paula direkt i två steg:
+The scripts drive Paula directly in two steps:
 
-1. `$64FE` / `$652C` / `$655A` / `$6588` (op78/81, 82, 83, 84) stänger kanalens DMA och laddar register: pekare, längd, period, volym. Inget startas.
-2. En senare op slår på DMA: op85–88 (`$2184–$21C0`) slår på DMA och sätter längden till 1 ord, så samplet spelas **en gång** och kanalen tystnar i en ordslinga. Op89 (`$21D4`) slår bara på DMA, så samplet **loopar** tills kanalen laddas om (hissmotorn).
+1. `$64FE` / `$652C` / `$655A` / `$6588` (op78/81, 82, 83, 84) switch off the channel's DMA and load the registers: pointer, length, period, volume. Nothing is started.
+2. A later op switches DMA on: op85-88 (`$2184-$21C0`) switch DMA on and set the length to 1 word, so the sample plays **once** and the channel goes quiet in a one-word loop. Op89 (`$21D4`) only switches DMA on, so the sample **loops** until the channel is loaded again (the lift motor).
 
-Kanalerna 0 och 3 går till vänster, 1 och 2 till höger (Amiga-standard).
+Channels 0 and 3 go to the left, 1 and 2 to the right (the Amiga standard).
 
-## Porten
+## The port
 
-- `game` registrerar bara kommandon (`AudioCmd`: Load, Start, StartOnce) i ordning, per tick (`State.Sounds`). Spelstate rörs inte.
-- `pkg/audio.Mixer` har fyra kanaler, närmaste-granne-resampling (som Paula, utan filter) och 16-bitars stereo. `cmd/game` skickar kommandona efter varje tick. `-mute` stänger av ljudet.
-- Avvikelser: kommandona tillämpas i tickens takt, inte på skanlinjen. Ordslingan efter ett engångssampel räknas som tystnad. Amigans lågpassfilter saknas.
-- Rättat samtidigt: op79/op80-listornas startposition sätts av initkoden `$3B0`, inte av en post i filen.
+- `game` only records commands (`AudioCmd`: Load, Start, StartOnce) in order, per tick (`State.Sounds`). The game state is not touched.
+- `pkg/audio.Mixer` has four channels, nearest-neighbour resampling (like Paula, without a filter) and 16-bit stereo. `cmd/game` sends the commands after every tick. `-mute` switches the sound off.
+- Deviations: the commands are applied at the pace of the tick, not on the scan line. The word loop after a one-shot sample counts as silence. The Amiga's low-pass filter is missing.
+- Corrected at the same time: the start position of the op79/op80 lists is set by the init code `$3B0`, not by a record in the file.

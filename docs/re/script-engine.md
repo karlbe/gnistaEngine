@@ -1,152 +1,143 @@
-# Skriptmotorn (aktörer, animation, rörelse)
+# The script engine (actors, animation, movement)
 
-Översikt och bakgrund finns i `README.md`. Den här filen samlar de tekniska detaljerna. Adresser är hunk-relativa i `ns`.
+These are the technical details of the script engine; overview and background are in the README. Addresses are hunk-relative in `ns`. This note was written while the engine was being mapped, and some of its statements are out of date: the lift, the enemies, the rooms and the ending are described in their own notes (`lift.md`, `enemies.md`, `rooms.md`, `ending.md`), which supersede the "next steps" and the remarks below about what is not ported yet.
 
-Status per påstående: **verifierat** (bekräftat i emulatorn), **kod** (utläst ur disassemblyn men inte provat), **hypotes**.
+Status per statement: **verified** (confirmed in the emulator), **code** (read from the disassembly but not tried), **hypothesis**.
 
-## Verktyg
+## Tools
 
-- `py tools/scriptdis.py ops` listar opkoder, hanteraradresser och antal operandbyte.
-- `py tools/scriptdis.py scripts assets-local/scripts.txt` disassemblerar alla skript i skripttabellen. Utdata ligger lokalt eftersom det är originaldata.
+- `py tools/scriptdis.py ops` lists opcodes, handler addresses and the number of operand bytes.
+- `py tools/scriptdis.py scripts assets-local/scripts.txt` disassembles all scripts in the script table. The output is kept locally because it is derived from the original's data.
 
-Operandräkningen är automatisk: hanteraren följs linjärt, och både läsningar via `(a5)+` och överhopp med `adda/addq #n,a5` räknas. Det senare behövs eftersom de villkorade hoppen läser sina operander via `a0` och hoppar över dem. Alla 170 skript avkodas utan någon ogiltig opkod. De villkorade hoppen till `$18BE` och op37:s loop (via `$10F8`) behandlas som "fortsätt om villkoret är falskt". Bara op40 och op41 (stora hanterare med egna slutdelar) stoppar fortfarande disassemblern.
+The operand count is automatic: the handler is followed linearly, and both reads through `(a5)+` and skips with `adda/addq #n,a5` are counted. The latter is needed because the conditional jumps read their operands through `a0` and skip over them. All 170 scripts decode without any invalid opcode. The conditional jumps to `$18BE` and the loop of op37 (through `$10F8`) are treated as "continue if the condition is false". Only op40 and op41 (large handlers with endings of their own) still stop the disassembler.
 
-Användning i skripten (antal förekomster): op00 5 591, op22 895, op27 542, op02 320, op16 310, op23 223, op24/25 120 vardera, op03 116, op01 111, op32/33 96 vardera.
+Use in the scripts (number of occurrences): op00 5,591, op22 895, op27 542, op02 320, op16 310, op23 223, op24/25 120 each, op03 116, op01 111, op32/33 96 each.
 
-## Aktörsloopen (`$C36`)
+## The actor loop (`$C36`)
 
-**Kod + verifierat.**
+**Code + verified.**
 
-- 5 aktörsplatser à 30 byte från `$2B28` (räknare i `$C7C`, startvärde 4).
-- Plats `+$0C`: skriptpekare (absolut adress) som laddas i `a5`. Plats `+$10`: pekare till aktörens data, som laddas i `a4`. En plats där `+$10` är 0 hoppas över.
-- Efter tolken skrivs `a5` tillbaka till `+$0C`. Nästa gång fortsätter skriptet där det slutade.
-- I spelläge från savestate används bara plats 0 (spelaren, aktördata på `$8140`). Övriga platser är tomma.
+- 5 actor slots of 30 bytes from `$2B28` (counter in `$C7C`, start value 4).
+- Slot `+$0C`: script pointer (absolute address), loaded into `a5`. Slot `+$10`: pointer to the actor's data, loaded into `a4`. A slot where `+$10` is 0 is skipped.
+- After the interpreter `a5` is written back to `+$0C`. Next time the script continues where it stopped.
+- In game mode from a savestate only slot 0 is used (the player, actor data at `$8140`). The other slots are empty.
 
-## Tolken (`$C7E`)
+## The interpreter (`$C7E`)
 
-**Kod.**
+**Code.**
 
-Tolken hämtar opkodsbyten, slår upp hanterarens adress i en tabell med 4 byte per opkod (på `$21EC`) och hoppar dit. Hanteraren läser sina operander ur skriptströmmen och hoppar tillbaka till tolken.
+The interpreter fetches the opcode byte, looks up the handler's address in a table with 4 bytes per opcode (at `$21EC`) and jumps there. The handler reads its operands from the script stream and jumps back to the interpreter.
 
-91 opkoder (0–90). Tabellen slutar där värdena inte längre är kodadresser.
+91 opcodes (0 to 90). The table ends where the values are no longer code addresses.
 
-## Skripttabellen (`$2BBE`)
+## The script table (`$2BBE`)
 
-**Kod.** 170 långord med absoluta pekare till skript. Skripten ligger i kodhunken från `$2E6A`. Opkod 34 (`goto n`) hoppar till skript *n* via tabellen.
+**Code.** 170 longwords with absolute pointers to scripts. The scripts are in the code hunk from `$2E6A`. Opcode 34 (`goto n`) jumps to script *n* through the table.
 
-## Kända opkoder
+## Known opcodes
 
-| Opkod | Operander | Betydelse | Status |
+| Opcode | Operands | Meaning | Status |
 |---|---|---|---|
-| 0 | – | Vänta en bildruta: lämna tolken, fortsätt här nästa bildruta | **verifierat** (≈50 per sekund när spelaren går; mätt till 44/s plus 5 hopp som inte räknades, på 3 s) |
-| 1, 2, 3 | 2 | Sätt aktörens två bildnummer (`$4(a4)`, `$1C(a4)`), räknat från en bas (`$EA0`/`$EA2`) och en riktningsfaktor (`$4F2`). Op2 och op3 lägger till 116 (`$74`) respektive ett annat tillägg, troligen andra riktningar eller varianter | kod; innebörden är hypotes |
-| 7 | 1 | Övre bild = *n* + 116 + bas `$EA0` x riktning `$4F2` | kod |
-| 10 | 1 | Övre bild = *n* + 622 (`$26E`) | kod |
-| 13 | 1 | Undre bild = *n* + 254 (`$FE`) + bas `$EA2` x riktning | kod |
-| 16 | 2 | Övre och undre bild = *n* + 394 (`$18A`) | kod |
-| 17 | 1 | Övre bild = *n* + 116 | kod |
-| 20 | 1 | Undre bild = *n* + 394 | kod |
-| 21 | 2 | Sätt bildbaserna `$EA0` och `$EA2` | kod |
-| 26 | 2 (signerade) | Övre spritedelens position = aktörens position (plats `+0/+2`) + (dx, dy) → aktörsdata `+0/+2` | kod |
-| 27 | 2 (signerade) | Samma för undre delen → aktörsdata `+$18/+$1A`. Förekommer före varje bildbyte i gångskripten (t.ex. −4, −6, −16) | kod |
-| 22–25 | – | Flytta aktören 1 pixel höger/vänster/upp/ned (båda spritedelarna och platsens position). Vid passerad tile-gräns läses sensorerna om (se nedan) | kod |
-| 35 | 1 | Anropa skript *n* (gosub). Återhoppsadressen sparas i `$1130` (en nivå) | kod |
-| 37 | 2 (*antal*, *n*) | Räknad loop: goto *n* sammanlagt *antal* gånger i följd, fortsätt sedan. Räknaren ligger i `$117E` (`$FF` = ingen loop pågår) | kod; verifierat (trace, gång vänster) |
-| 38 / 39 | – | Vänd höger/vänster: läs sensorerna `$16–$1A` runt aktörens egen ruta åt det hållet (inte `$1B`), nollställ/sätt bit 1 i `$506` | kod; verifierat (trace) |
-| 43 | – | Återgå till sparad skriptposition (`$17E0`) | kod |
-| 61 | – | Om fire: sätt spärrflaggan `$1A24` | kod |
-| 62 / 63 | – | Om spärrflaggan är satt: nollställ den. Annars, om aktören står på tile `$29` (hissen): starta hisskorgen i plats 4 (`$2BA0`) med eget skript och byt själv skript | kod |
-| 64 | 2 (*a*, *b*) | Fire: goto *a*. Om senast tryckta tangent (`$69AD`) är F1–F3 (`$50–$52`): fortsätt. Om ingen riktning: goto *b* | kod |
-| 65 | 2 (*a*, *b*) | Fire: goto *a*. Nedåt: goto *b* | kod |
-| 66 | 5 (skada, *a*, *b*, *c*, *d*) | Om aktören träffats (`$1BFC` ≠ 0): dra skadan från en räknare (`$1C05`, startar på 3) och välj ett av fyra skript beroende på från vilken sida träffen kom och om räknaren tog slut | kod; innebörd delvis hypotes |
-| 75 | – | Nollställ platsens byte `$1C` och starta om aktörens första skript | kod |
-| 78 | 2 (*n*, ljud) | Skott: per vapen finns 4 byte på `$4F6 + vapen*4` (skott i magasinet, magasin, magasinsstorlek, HUD-flagga). Tomt magasin: ladda om från reserv (sätt HUD-flagga), eller goto *n* om inga finns. Dra ett skott och spela ljudet (fortsätter in i op81) | kod |
-| 79 | – | Spela nästa ljud ur en nollterminerad cyklisk lista (`$20C2`, position i `$20CE`). Används för fotsteg. Efter ett varv spelas första ljudet två gånger, precis som i originalet | kod |
-| 81 | 1 | Spela ljud *n* via `$64FE` | kod |
-| 90 | – | Sätt utfallet `$21EA`=2 (explosionsslutet) och avsluta bildrutan | kod |
-| 82 / 83 | 1 | Ljudeffekt *n* från tabellen på `$6432` (10 byte per post) via `$652C` respektive `$655A`, troligen starta/stoppa | kod; innebörd hypotes |
-| 85 / 86 / 87 | – | Ljudkanal 0/1/2: slå på DMA och sätt längden till 1 ord, alltså tysta kanalen efter aktuellt sampel | kod; innebörd hypotes |
-| 28 | 3 | `dx` → `$8F5A`, `dy` → `$8F5C`, tredje byten → `$8F5F`. Markerar rörelse (`$8F60`=1) | kod |
-| 29 | – | Nollställ `dx`, `dy`, `$8F5E/$8F5F` och rörelseflaggan | kod |
-| 30 / 31 | – | `dx` = +1 / −1, `dy` = 0, rörelseflaggan nollställs | kod |
-| 32 / 33 | – | `dx` = 0, `dy` = −1 / +1, rörelseflaggan nollställs | kod |
-| 34 | 1 | `goto` skript *n* (via `$2BBE`) | kod; används för att kedja och loopa gångcykeln (sett i emulatorn) |
-| 40 | 12 (skriptnummer) | **Spelarens styrning i stillastående** (`$11DC/$1384`). F1–F3 byter vapen (`$4F2`=0–2, kräver bit i `$504` för F2/F3), markerar vapnet i HUD-paletten (`$7296`) och startar om vapnets viloskript (`$2E6A`/`$30F8`/`$33FC`), varefter bildrutan slutar. Annars, i tur och ordning: nedflagga (`$18BC`) → operand 10. Mellanslag (`$40`) på tile `$26–$29` med laddningar kvar (`$502`) → räkna ned, operand 6 (placera sprängladdning). Höger och sidosensor ≥ 11 → operand 0. Vänster → operand 1. Upp (om inte `$C1C`): tile under fötterna `$26–$28` → rutin `$23CC`; sidosensor `$0B–$0F` → operand 2; två rader upp `$21–$25` → operand 3; annars rutin `$16A8` (hissen). Ned: `$C1C` → operand 9; snett nedanför `$1B–$1D` → 7; under `$1E–$20` → 8; annars 9. Fire → operand 11. Sätter även `$506` (bit 0/1 = påbörjad gång höger/vänster), `$C34` (upp/ned) och `$17DC` (egen adress för op42) | kod; gång höger + väggstopp **verifierat** (trace) |
-| 41 | 12 | **Spelarens styrning vänd vänster** (`$1442/$15EA`), spegelbild av op40: sätter bit 1 i `$506`, sparar sin adress i `$17E0`, går framåt (vänster) bara om sidosensorn ≥ 11, höger vänder (operand 0). Upp: sidosensor `$16–$1A` (i stället för `$0B–$0F`). Ned: `$1A` i `$13–$15` (i stället för `$1B–$1D`). Viloskript efter F1–F3: `$2EE2/$3170/$3474` | kod; verifierat (trace vänster, trappa upp) |
-| 42 | – | Tillbaka till senaste op40 (`$17DC`) | kod; verifierat (trace) |
-| 43 | – | Tillbaka till senaste op41 (`$17E0`) | kod; verifierat (trace) |
-| 44 | 2 (*a*, *b*) | Våningsbyte: anropar `$FFC` (aktörens ruta i tilebufferten). Styrspak upp och tilen 4 rader ovanför (−240) är `$29` eller `$2A`: goto *a*. Styrspak ned och tilen 4 rader nedanför (+240) är `$29`/`$2A`: goto *b*. Annars fortsätt. `$29/$2A` är hissen, en tile per våning (se "Hissen" nedan) | kod |
-| 45 | 1 (*n*) | Om styrspak höger och sensor `$19` ≥ 11: goto *n* | kod; stopp vid vägg **verifierat** |
-| 46 | 1 (*n*) | Om styrspak vänster och sensor `$19` ≥ 11: goto *n* | kod; stopp vid vägg **verifierat** |
-| 47 | 1 (*n*) | Om styrspak ned och sensor `$1B` ≥ 11: sätt `$18BC`=1 och goto *n* | kod |
-| 48–51 | – | Hisskorgen (plats 4, aktördata `$8128`): starta skript `$4943`/`$49B2`/`$4A21`/`$4A92` | kod |
-| 52 / 53 | – | Sätt aktörens båda bobs status (`+6`, `+$1E`) till 1 resp. 2 (2 = dölj) | kod |
-| 54–57 | – | Hisskorgen: status 2; y −64 och status 1; y +64 och status 1; status 1 | kod; innebörd hypotes (en våning = 64 px) |
-| 58 / 59 | – | `$17C6`: nollställ bit 0 och sätt bit 1 / sätt bit 0 | kod |
-| 60 | – | Nollställ `$17C6` och töm plats 4 (hisskorgen borta), avsluta bildrutan | kod |
-| 68 / 69 | – | Skott höger/vänster (hitscan): närmaste levande aktör (`+$10` ≠ 0, `+$1C` = 0) i plats 1–3 på den sidan, oavsett höjd. Träff: vapen 1 dödar direkt, annars minskas träffpunkterna i fiendeposten (`+8` → `+$14`) och fienden byter till skadeskriptet (`+$10`); vid 0 sätts `+$1C`=1 och dödsskriptet (`+8`) startas. `$1F44` nollställer `$1BFC` om det var den träffade | kod; utan träff verifierat (trace fire); träff ej portad |
-| 80 | – | Som op79 men med listan på `$2114` (position i `$2120`), troligen fotsteg i trappor | kod; verifierat (trace trappa) |
+| 0 | - | Wait a frame: leave the interpreter, continue here the next frame | **verified** (about 50 per second when the player walks; measured as 44/s plus 5 jumps that were not counted, over 3 s) |
+| 1, 2, 3 | 2 | Set the actor's two picture numbers (`$4(a4)`, `$1C(a4)`), counted from a base (`$EA0`/`$EA2`) and a direction factor (`$4F2`). Op2 and op3 add 116 (`$74`) and another addition respectively, probably other directions or variants | code; the meaning is a hypothesis |
+| 7 | 1 | Upper picture = *n* + 116 + base `$EA0` x direction `$4F2` | code |
+| 10 | 1 | Upper picture = *n* + 622 (`$26E`) | code |
+| 13 | 1 | Lower picture = *n* + 254 (`$FE`) + base `$EA2` x direction | code |
+| 16 | 2 | Upper and lower picture = *n* + 394 (`$18A`) | code |
+| 17 | 1 | Upper picture = *n* + 116 | code |
+| 20 | 1 | Lower picture = *n* + 394 | code |
+| 21 | 2 | Set the picture bases `$EA0` and `$EA2` | code |
+| 26 | 2 (signed) | The upper sprite part's position = the actor's position (slot `+0/+2`) + (dx, dy) to actor data `+0/+2` | code |
+| 27 | 2 (signed) | The same for the lower part to actor data `+$18/+$1A`. Occurs before every picture change in the walking scripts (for example -4, -6, -16) | code |
+| 22-25 | - | Move the actor 1 pixel right/left/up/down (both sprite parts and the slot's position). When a tile border is passed the sensors are read again (see below) | code |
+| 35 | 1 | Call script *n* (gosub). The return address is saved in `$1130` (one level) | code |
+| 37 | 2 (*count*, *n*) | Counted loop: goto *n* in total *count* times in a row, then continue. The counter is in `$117E` (`$FF` = no loop running) | code; verified (trace, walk left) |
+| 38 / 39 | - | Turn right/left: read the sensors `$16-$1A` around the actor's own cell in that direction (not `$1B`), clear/set bit 1 in `$506` | code; verified (trace) |
+| 43 | - | Return to the saved script position (`$17E0`) | code |
+| 61 | - | If fire: set the latch flag `$1A24` | code |
+| 62 / 63 | - | If the latch flag is set: clear it. Otherwise, if the actor stands on tile `$29` (the lift): start the lift cabin in slot 4 (`$2BA0`) with a script of its own and change the actor's own script | code |
+| 64 | 2 (*a*, *b*) | Fire: goto *a*. If the last pressed key (`$69AD`) is F1-F3 (`$50-$52`): continue. If no direction: goto *b* | code |
+| 65 | 2 (*a*, *b*) | Fire: goto *a*. Down: goto *b* | code |
+| 66 | 5 (damage, *a*, *b*, *c*, *d*) | If the actor has been hit (`$1BFC` is non-zero): subtract the damage from a counter (`$1C05`, starts at 3) and choose one of four scripts depending on which side the hit came from and whether the counter ran out | code; the meaning is partly a hypothesis |
+| 75 | - | Clear the slot's byte `$1C` and restart the actor's first script | code |
+| 78 | 2 (*n*, sound) | Shot: for each weapon there are 4 bytes at `$4F6 + weapon*4` (rounds in the magazine, magazines, magazine size, HUD flag). Empty magazine: reload from the reserve (set the HUD flag), or goto *n* if there is none. Take a round and play the sound (continues into op81) | code |
+| 79 | - | Play the next sound from a zero-terminated cyclic list (`$20C2`, position in `$20CE`). Used for footsteps. After one lap the first sound is played twice, just as in the original | code |
+| 81 | 1 | Play sound *n* through `$64FE` | code |
+| 90 | - | Set the outcome `$21EA`=2 (the explosion ending) and end the frame | code |
+| 82 / 83 | 1 | Sound effect *n* from the table at `$6432` (10 bytes per record) through `$652C` and `$655A` respectively, probably start/stop | code; the meaning is a hypothesis |
+| 85 / 86 / 87 | - | Sound channel 0/1/2: switch on DMA and set the length to 1 word, that is, silence the channel after the current sample | code; the meaning is a hypothesis |
+| 28 | 3 | `dx` to `$8F5A`, `dy` to `$8F5C`, the third byte to `$8F5F`. Marks movement (`$8F60`=1) | code |
+| 29 | - | Clear `dx`, `dy`, `$8F5E/$8F5F` and the movement flag | code |
+| 30 / 31 | - | `dx` = +1 / -1, `dy` = 0, the movement flag is cleared | code |
+| 32 / 33 | - | `dx` = 0, `dy` = -1 / +1, the movement flag is cleared | code |
+| 34 | 1 | `goto` script *n* (through `$2BBE`) | code; used to chain and loop the walk cycle (seen in the emulator) |
+| 40 | 12 (script numbers) | **The player's controls when standing still** (`$11DC/$1384`). F1-F3 change weapon (`$4F2`=0-2, needs a bit in `$504` for F2/F3), mark the weapon in the HUD palette (`$7296`) and restart the weapon's idle script (`$2E6A`/`$30F8`/`$33FC`), after which the frame ends. Otherwise, in turn: the down flag (`$18BC`) goes to operand 10. Space (`$40`) on tile `$26-$29` with charges left (`$502`) counts down and goes to operand 6 (lay a charge). Right and the side sensor >= 11 goes to operand 0. Left goes to operand 1. Up (if not `$C1C`): tile under the feet `$26-$28` calls routine `$23CC`; side sensor `$0B-$0F` goes to operand 2; two rows up `$21-$25` goes to operand 3; otherwise routine `$16A8` (the lift). Down: `$C1C` goes to operand 9; diagonally below `$1B-$1D` goes to 7; below `$1E-$20` goes to 8; otherwise 9. Fire goes to operand 11. It also sets `$506` (bit 0/1 = walk to the right/left started), `$C34` (up/down) and `$17DC` (its own address for op42) | code; walk right + wall stop **verified** (trace) |
+| 41 | 12 | **The player's controls facing left** (`$1442/$15EA`), a mirror image of op40: sets bit 1 in `$506`, saves its address in `$17E0`, walks forward (left) only if the side sensor is >= 11, right turns (operand 0). Up: side sensor `$16-$1A` (instead of `$0B-$0F`). Down: `$1A` in `$13-$15` (instead of `$1B-$1D`). Idle scripts after F1-F3: `$2EE2/$3170/$3474` | code; verified (trace left, stairs up) |
+| 42 | - | Back to the last op40 (`$17DC`) | code; verified (trace) |
+| 43 | - | Back to the last op41 (`$17E0`) | code; verified (trace) |
+| 44 | 2 (*a*, *b*) | Floor change: calls `$FFC` (the actor's cell in the tile buffer). Stick up and the tile 4 rows above (-240) is `$29` or `$2A`: goto *a*. Stick down and the tile 4 rows below (+240) is `$29`/`$2A`: goto *b*. Otherwise continue. `$29/$2A` is the lift, one tile per floor (see "The lift" below) | code |
+| 45 | 1 (*n*) | If the stick is right and sensor `$19` >= 11: goto *n* | code; wall stop **verified** |
+| 46 | 1 (*n*) | If the stick is left and sensor `$19` >= 11: goto *n* | code; wall stop **verified** |
+| 47 | 1 (*n*) | If the stick is down and sensor `$1B` >= 11: set `$18BC`=1 and goto *n* | code |
+| 48-51 | - | The lift cabin (slot 4, actor data `$8128`): start script `$4943`/`$49B2`/`$4A21`/`$4A92` | code |
+| 52 / 53 | - | Set the status of the actor's two bobs (`+6`, `+$1E`) to 1 and 2 respectively (2 = hide) | code |
+| 54-57 | - | The lift cabin: status 2; y -64 and status 1; y +64 and status 1; status 1 | code; the meaning is a hypothesis (one floor = 64 px) |
+| 58 / 59 | - | `$17C6`: clear bit 0 and set bit 1 / set bit 0 | code |
+| 60 | - | Clear `$17C6` and empty slot 4 (the lift cabin is gone), end the frame | code |
+| 68 / 69 | - | Shot right/left (hitscan): the nearest living actor (`+$10` non-zero, `+$1C` = 0) in slots 1 to 3 on that side, at any height. Hit: weapon 1 kills at once, otherwise the hit points in the enemy record (`+8` to `+$14`) are reduced and the enemy changes to its hurt script (`+$10`); at 0, `+$1C`=1 is set and the death script (`+8`) is started. `$1F44` clears `$1BFC` if it was the one hit | code; without a hit verified (trace fire); the hit was not ported when this was written |
+| 80 | - | Like op79 but with the list at `$2114` (position in `$2120`), probably footsteps on stairs | code; verified (trace stairs) |
 
-Gemensamt slut för de villkorade hoppen: `$18BE` läser operandbyten och gör `goto` via `$2BBE`. Spelarens skript fungerar alltså som en tillståndsmaskin, ungefär "stå still; om höger och fritt, byt till gå-höger".
+The common ending of the conditional jumps: `$18BE` reads the operand byte and does a `goto` through `$2BBE`. The player's script thus works as a state machine, roughly "stand still; if right and free, change to walk right".
 
-## Hissen (`$16A8`)
+## The lift (`$16A8`)
 
-**Kod; att `$29/$2A` är hissen är en stark hypotes** (kartan har dem en våning isär i kolumn 489 med samma ram, och walkthroughen nämner hissar).
+**Code; that `$29/$2A` is the lift is a strong hypothesis** (the map has them one floor apart in column 489 with the same frame, and the walkthrough mentions lifts). The lift is described in full in `lift.md`.
 
-Op40/op41 anropar `$16A8` när man trycker upp och inget annat upp-fall gäller. Först `$16D8`: om vyns blockkolumn (`$8F72`) är 0–2, 3–5 eller 6–8 krävs bit 0, 1 resp. 2 i `$505` (korten, som sätts när man plockar upp föremål och visas under "ELEVATOR/DOOR CARDS" i HUD:en). Saknas kortet händer ingenting. Längre åt höger krävs inget kort. Därefter, om spelaren står på `$29/$2A` och `$17C6` bit 0 inte är satt:
+Op40/op41 call `$16A8` when up is pressed and no other up case applies. First `$16D8`: if the view's block column (`$8F72`) is 0-2, 3-5 or 6-8, bit 0, 1 or 2 in `$505` is required (the cards, which are set when items are picked up and shown under "ELEVATOR/DOOR CARDS" in the HUD). If the card is missing nothing happens. Further to the right no card is needed. Then, if the player stands on `$29/$2A` and `$17C6` bit 0 is not set:
 
-- `$17C6` bit 1 satt: hisskorgen (plats 4) startar om på `$46A6`, och spelaren fortsätter med op40:s operand 5.
-- Annars: sätt bit 0, placera korgen i plats 4 på spelarens position − (8, 22) med aktördata `$8128` och skript `$455E`. Spelaren fortsätter med operand 4.
+- `$17C6` bit 1 set: the lift cabin (slot 4) restarts at `$46A6`, and the player continues with op40's operand 5.
+- Otherwise: set bit 0, put the cabin in slot 4 at the player's position - (8, 22) with actor data `$8128` and script `$455E`. The player continues with operand 4.
 
-Korgens skript använder op48–60 och fler okartlagda opkoder (bl.a. op89), så hissen fungerar inte i porten än.
+## Movement and scrolling per frame (`$8888`)
 
-## Rörelse och scrollning per bildruta (`$8888`)
+**Code + verified (trace stairs).** `$8F5E` is a countdown: when it is not 0 it is decremented and nothing else happens. Otherwise it is reloaded from `$8F5F`, the view is moved by dx/dy (`$892C`), and if bit 0 of `$8F60` is not set dx/dy are cleared. Op28 thus sets a lasting movement with a delay (walking: `op28 1 0 0`, stairs: `op28 255 255 2` = a step every third frame), while op30-33 only apply for one frame.
 
-**Kod + verifierat (trace trappa).** `$8F5E` är en nedräkning: när den inte är 0 minskas den och inget annat händer. Annars laddas den om från `$8F5F`, vyn flyttas med dx/dy (`$892C`), och om bit 0 i `$8F60` inte är satt nollställs dx/dy. Op28 sätter alltså en bestående rörelse med fördröjning (gång: `op28 1 0 0`, trappa: `op28 255 255 2` = ett steg var tredje bildruta), medan op30–33 bara gäller en bildruta.
+## The actor's position and sensors
 
-## Aktörens position och sensorer
+**Code + verified.**
 
-**Kod + verifierat.**
+- The slot's byte `$14`/`$15` is the actor's tile position in the view. `$FFC` calculates the actor's cell in the **tile buffer at `$9118`** (60 tiles wide, 16 rows): `$9118 + ($14 + $8F76) + ($15 + $8F78) * 60`.
+- The slot's bytes `$18-$1B` are **sensors**: tile ids from the cells around the actor, filled in by the handlers around `$F2A-$FF4` and `$1190-$11CA`. Turned right: two rows up (`-$78`), the cell to the right (`+1`), the row below and two steps to the side (`+$3E`), two cells to the right (`+2`). Turned left: the same with `-1`, `-2` and `+$3A`.
+- **Collision rule: tile id < 11 blocks.** No separate collision table is needed for walls. **Verified:** when walking right from the start the figure stops at x=8112 with `$19`=0, and to the left at x=7920 with `$19`=6. The walking bridge is 12 tiles long.
 
-- Platsens byte `$14`/`$15` är aktörens tile-position i vyn. `$FFC` räknar ut aktörens ruta i **tilebufferten på `$9118`** (60 tiles bred, 16 rader): `$9118 + ($14 + $8F76) + ($15 + $8F78) * 60`.
-- Platsens byte `$18–$1B` är **sensorer**: tile-ID från rutorna runt aktören, som fylls i av hanterarna runt `$F2A–$FF4` och `$1190–$11CA`. Vänd höger: två rader upp (`−$78`), rutan till höger (`+1`), raden under och två steg åt sidan (`+$3E`), två rutor till höger (`+2`). Vänd vänster: samma sak med `−1`, `−2` och `+$3A`.
-- **Kollisionsregel: tile-ID < 11 blockerar.** Ingen separat kollisionstabell behövs för väggar. **Verifierat:** när man går höger från start stannar figuren vid x=8112 med `$19`=0, och åt vänster vid x=7920 med `$19`=6. Gångbron är 12 tiles lång.
+The other opcodes were not mapped when this was written. Their handler addresses and operand counts are in `scriptdis.py ops`.
 
-Övriga opkoder är okartlagda. Deras hanteradresser och operandantal finns i `scriptdis.py ops`.
+## Movement per frame (`$892C`)
 
-## Rörelse per bildruta (`$892C`)
+**Code + verified.**
 
-**Kod + verifierat.**
+- `$8F56 += dx` (the view's and the player's x position in the world) and `$8F7A += dx` (the pixel within the tile, 0-15).
+- When `$8F7A` wraps, the tile column within the block (`$8F76`), the block column (`$8F72`) and **`$4EE`** (the player's position index, see below) are adjusted. The same goes for y through `$8F58`, `$8F7C`, `$8F78`, `$8F74`.
+- Bits in `$8F6C` mark that a tile border has been passed to the left/right/up/down. The map drawer uses them to draw in new columns and rows.
+- Measured: when walking right `$8F56` increases by 1 per frame. When the stick is released the figure continues to the next even 16-pixel border. When the direction is changed it takes about 0.6 s before the figure starts to walk (the turn). **Verified** with `tools/uae/uaectl.py`.
 
-- `$8F56 += dx` (vyns och spelarens x-position i världen) och `$8F7A += dx` (pixel inom tilen, 0–15).
-- När `$8F7A` slår runt justeras tile-kolumnen inom blocket (`$8F76`), blockkolumnen (`$8F72`) och **`$4EE`** (spelarens positionsindex, se nedan). Samma sak gäller y via `$8F58`, `$8F7C`, `$8F78`, `$8F74`.
-- Bitar i `$8F6C` markerar att en tile-gräns passerats åt vänster/höger/upp/ned. Kartritaren använder dem för att rita in nya kolumner och rader.
-- Uppmätt: när man går höger ökar `$8F56` med 1 per bildruta. När man släpper styrspaken fortsätter figuren till nästa jämna 16-pixelsgräns. Vid byte av riktning dröjer det ca 0,6 s innan figuren börjar gå (vändning). **Verifierat** med `tools/uae/uaectl.py`.
+## Attributes per position
 
-## Attribut per position
+**Code, the meaning is a hypothesis.** At `$23D0` `$4EE` is used as an index into a byte table at `$A9F4`. The value x 12 points out a 12-byte record in a table at `$ACAC`, and the record's flags control what happens (for example `btst #5,1(a0)`). The tables follow directly after the map matrix (`$A333`, 29 x 26 bytes) and the 0/1 table at `$A5A5`. They are probably the game's collision and interaction data (floors, stairs, doors, lifts). The rooms are described in `rooms.md`.
 
-**Kod, hypotes om innebörd.** På `$23D0` används `$4EE` som index i en bytetabell på `$A9F4`. Värdet x 12 pekar ut en post på 12 byte i en tabell på `$ACAC`, och postens flaggor styr vad som händer (t.ex. `btst #5,1(a0)`). Tabellerna ligger direkt efter kartmatrisen (`$A333`, 29 x 26 byte) och 0/1-tabellen på `$A5A5`. Troligen är det spelets kollisions- och interaktionsdata (golv, trappor, dörrar, hissar).
+## The sensors read through the view, with a one-frame delay
 
-## Sensorerna läser via vyn, med en bildrutas fördröjning
+**Verified (trace).** `$FFC` calculates the actor's cell as the *view's* tile position (`floor(view_x/16)`, where `view_x` = `$8F56`) plus the slot's `$14/$15`. The view is scrolled by `$892C` **after** the actor loop in each frame. Sensors that are read in a frame therefore see the view from the previous frame. For the player (fixed on screen cell (10, 6), world x = view x + 160) that gives the base `floor((x - dx)/16)`, not `floor(x/16)`. With `floor(x/16)` the port went one tile too far before it stopped at the wall.
 
-**Verifierat (trace).** `$FFC` räknar ut aktörens ruta som *vyns* tile-position (`floor(view_x/16)`, där `view_x` = `$8F56`) plus platsens `$14/$15`. Vyn scrollas av `$892C` **efter** aktörsloopen i varje bildruta. Sensorer som läses i en bildruta ser därför vyn från förra bildrutan. För spelaren (fast på skärmruta (10, 6), världs-x = vy-x + 160) ger det basen `floor((x − dx)/16)`, inte `floor(x/16)`. Med `floor(x/16)` gick porten en tile för långt innan den stannade vid väggen.
+## The Go port of the engine (`pkg/game/script`)
 
-## Go-porten av motorn (`pkg/game/script`)
+- `Program` (the code hunk + the script table), `VM` with 5 `Slot`s, `Globals` and an `Env` interface for the stick, keys, tiles (world coordinates), helper actor, hit and sound.
+- `VM.Frame()` runs all active slots to the next wait and then scrolls the view like `$8888`. A slot that reaches an unmapped opcode stays on it, and the rest of the frame is run anyway.
+- Unmapped opcodes give `ErrUnimplemented`, and unmapped routines of the original give `ErrUnmapped`. Nothing is guessed.
+- **Comparison with the original:** `TestAgainstOriginalTrace` runs all `assets-local/uae/trace_*.json` (recorded with `py tools/uae/capture_script.py <direction> <seconds> [movement]`). The test starts the port from the same state, runs as long as the recording and compares the sequence of changes in (script position, picture +0, picture +$18, dx, x). Repeated steps in the original trace are merged, because the recording sometimes reads memory between the actor loop and the scrolling. All steps agree: right 134, left 95 (turn, op37-39, op41), down 20, fire 150 (op68, op78), up from the start 1, stairs up 201 (`right:2.5,left:0.15` first; op80, `$8888`).
 
-- `Program` (kodhunken + skripttabellen), `VM` med 5 `Slot`, `Globals` och ett `Env`-gränssnitt för styrspak, tangent, tiles (världskoordinater), hjälparaktör, träff och ljud.
-- `VM.Frame()` kör alla aktiva platser till nästa väntan och scrollar sedan vyn som `$8888`. En plats som når en okartlagd opkod blir stående på den, och resten av bildrutan körs ändå.
-- Okartlagda opkoder ger `ErrUnimplemented`, och okartlagda originalrutiner (`$23CC`) ger `ErrUnmapped`. Inget gissas.
-- Implementerade opkoder: 0–3, 4/5/14/15 (vänta), 6–13, 16–47 (utom 41:s okartlagda `$23CC`-fall), 61–66 (66 bara utan träff), 68/69 (bara utan träff), 77–83, 85–87, 90. Dessutom `$16A8` (hissanrop) och `$8888` (scrollning).
-- **Jämförelse mot originalet:** `TestAgainstOriginalTrace` kör alla `assets-local/uae/trace_*.json` (inspelade med `py tools/uae/capture_script.py <riktning> <sek> [förflyttning]`). Testet startar porten från samma läge, kör lika länge som inspelningen och jämför följden av ändringar i (skriptposition, bild +0, bild +$18, dx, x). Upprepade steg i originalspåret slås ihop, eftersom inspelningen ibland läser minnet mellan aktörsloopen och scrollningen. Alla steg stämmer: höger 134, vänster 95 (vändning, op37–39, op41), ned 20, fire 150 (op68, op78), upp från start 1, trappa upp 201 (`right:2.5,left:0.15` först; op80, `$8888`).
+Note: the Go names `Upper`/`Lower` for the actor's two bobs are misleading. The record `+0` (`Upper`) is drawn at the actor's y (the legs), and the record `+$18` (`Lower`) 16 pixels higher up (the upper body).
 
-Obs: Go-namnen `Upper`/`Lower` på aktörens två bobs är missvisande. Posten `+0` (`Upper`) ritas på aktörens y (benen), och posten `+$18` (`Lower`) 16 pixlar högre upp (överkroppen).
+## Drawing (`$7D7E`, `$803A`)
 
-## Ritning (`$7D7E`, `$803A`)
-
-**Kod + verifierat mot skärmbild.** Bob-listan börjar på `$8128` (hisskorgen), följd av spelarens två poster `$8140/$8158`. Varje post är 24 byte: x, y (världspixlar), bildnummer (direkt index i `NSIBobs`), status (`+6`: 0 = tom, 2 = dölj, annars rita). Skärmposition = (x − `$8F56` − 16, y − `$8F58`). Den synliga spelytan är 320 × 128 (mätt i emulatorns skärmbild: kartan syns till och med rad 128, HUD:en börjar på rad 129). Blitten ritar 4 skärmplan: plan *p* får nästa lagrade plan om bit *p* i BHDR-postens första taggbyte är satt, annars rensas det under masken. Läsningen fortsätter förbi färgplanen in i maskplanet, så en 3-plansbob med tagg `$4F` får masken som plan 3 (färg 8–15). `amiga.Bank.Bob` avkodar så.
-
-## Nästa steg
-
-1. Hissen: korgens skript (`$455E`, `$46A6`, `$4943`…) och opkoderna 48–60, 84, 88, 89. Spela in när spelaren har kört hissen.
-2. Kartlägg `$23CC` (upp på tile `$26–$28`, troligen dörr) och resten av opkoderna, särskilt de som fiender och gisslan använder (op66 med träff, 67, 70–76, 84, 88, 89).
-3. Fiender i plats 1–3: var de startas, deras poster (`+8`: skript och träffpunkter) och träffdelen av op68/69.
+**Code + verified against a screenshot.** The bob list starts at `$8128` (the lift cabin), followed by the player's two records `$8140/$8158`. Each record is 24 bytes: x, y (world pixels), picture number (a direct index into `NSIBobs`), status (`+6`: 0 = empty, 2 = hide, otherwise draw). Screen position = (x - `$8F56` - 16, y - `$8F58`). The visible play area is 320 x 128 (measured in the emulator's screenshot: the map is visible up to and including line 128, the HUD starts on line 129). The blitter draws 4 screen planes: plane *p* gets the next stored plane if bit *p* in the BHDR record's first tag byte is set, otherwise it is cleared under the mask. The reading continues past the colour planes into the mask plane, so a 3-plane bob with tag `$4F` gets the mask as plane 3 (colours 8-15). `amiga.Bank.Bob` decodes it so.

@@ -1,19 +1,19 @@
-# Förgrund: varför gubben går bakom räcken
+# Foreground: why the player walks behind railings
 
-Status: **verifierat** mot skärmbilden från originalet (`assets-local/uae/ingame.png`) och koden, portat i `pkg/render`.
+Status: **verified** against the screenshot from the original (`assets-local/uae/ingame.png`) and the code, ported in `pkg/render`.
 
-## Mekanismen
+## The mechanism
 
-Spelskärmen har **fem bitplan**, men färgerna använder bara de fyra första (tile-bilderna har bara index 0–15). Det femte planet är en **förgrundsflagga**.
+The game screen has **five bitplanes**, but the colours only use the first four (the tile pictures only have indices 0 to 15). The fifth plane is a **foreground flag**.
 
-- Tile-ritaren (`$8D66`) kopierar ett lagrat plan till skärmplan *p* om bit *p* är satt i tilens planmask (första tagbyten i JBOB-posten). Tiles med bit 4 satt (taggarna `$57` och `$5F`, 88 tiles) lagrar ett femte plan och får därmed förgrundspixlar. Golvkanter, räcken och trappräcken är sådana.
-- Bob-ritaren (`$803A`) bygger först en mask i `$83B0` (`$80EA`, minterm `$B50`): **bobbens mask OCH INTE skärmens femte plan**. Därefter görs den vanliga cookie-cut-blittningen med den masken. Bobbar ritas alltså aldrig över pixlar med förgrundsflaggan, och det gäller alla bobbar (spelaren, fiender, hisskorgen och de kvarlämnade liken).
-- Färgregistren 16–31 i den extraherade paletten är svarta, men originalbilden visar förgrundspixlarna i sina vanliga färger. Porten ritar dem därför med index 0–15 och använder femte planet bara som mask.
+- The tile drawer (`$8D66`) copies a stored plane to screen plane *p* if bit *p* is set in the tile's plane mask (the first tag byte in the JBOB record). Tiles with bit 4 set (the tags `$57` and `$5F`, 88 tiles) store a fifth plane and thus get foreground pixels. Floor edges, railings and stair railings are such tiles.
+- The bob drawer (`$803A`) first builds a mask in `$83B0` (`$80EA`, minterm `$B50`): **the bob's mask AND NOT the screen's fifth plane**. Then the usual cookie-cut blit is done with that mask. Bobs are therefore never drawn over pixels with the foreground flag, and that goes for all bobs (the player, enemies, the lift cabin and the corpses left behind).
+- Colour registers 16 to 31 in the extracted palette are black, but the original picture shows the foreground pixels in their usual colours. The port therefore draws them with indices 0 to 15 and uses the fifth plane only as a mask.
 
-## Porten
+## The port
 
-`amiga.Bank.TileForeground(i)` läser femte planet. `render.drawMap` fyller en förgrundsmask för vyn och `drawBobPal` hoppar över de pixlarna.
+`amiga.Bank.TileForeground(i)` reads the fifth plane. `render.drawMap` fills a foreground mask for the view and `drawBobPal` skips those pixels.
 
-## Ljud på trappor (avvikelse)
+## Sound on stairs (deviation)
 
-Trappstegen (effekt 16–18, op80) är ungefär fyra gånger svagare än fotstegen (effekt 11–13) i originaldata, så de är praktiskt taget ohörbara. Porten har en förstärkning (`stairGain`) för dem, nu 1,0 alltså originalnivån (faktor 4 motsvarade fotstegen men var för högt, och 2 också) (`stairGain` i `cmd/game/main.go`, `Entry.Gain`). Det är **inte** originalbeteende. Stegar (skripten från `$3BAA`) har ingen ljudop alls i originalet och är tysta även i porten.
+The stair steps (effects 16 to 18, op80) are about four times weaker than the footsteps (effects 11 to 13) in the original data, so they are practically inaudible. The port has a gain (`stairGain`) for them, now 1.0, which is the original level (a factor of 4 matched the footsteps but was too loud, and 2 was too loud as well) (`stairGain` in `cmd/game/main.go`, `Entry.Gain`). It is **not** original behaviour. Ladders (the scripts from `$3BAA`) have no sound op at all in the original and are silent in the port too.

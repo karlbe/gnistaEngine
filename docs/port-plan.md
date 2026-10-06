@@ -1,153 +1,152 @@
-# Plan: port till Go (Windows först)
+# Plan: port to Go (Windows first)
 
-Mål: en trogen port av originalspelet till Go, som körs på Windows och använder originalets datafiler oförändrade under utveckling. Spellogiken återskapas från disassemblyn av `ns`. Ingen emulering av 68000-koden.
+Goal: a faithful port of the original game to Go, running on Windows and using the original's data files unchanged during development. The game logic is recreated from the disassembly of `ns`. No emulation of the 68000 code.
 
-Underlag: [adf-inventory.md](adf-inventory.md).
+Background: [adf-inventory.md](adf-inventory.md).
 
-## Principer
+## Principles
 
-- **Originalfilerna läses direkt.** Spelet laddar `assets-local/adf/*` i originalformat (ILBM, JBOB, RoomData, ljud). Ingen konvertering i förväg, så det blir en enda sanningskälla. Kartmatrisen och andra tabeller som ligger i `ns` extraheras av ett verktyg till en egen datafil (`assets-local/extracted/`), så att spelet aldrig behöver läsa binären.
-- **En asset-loader med utbytbar källa.** All läsning går via ett `content`-paket som pekar på en katalog. Byte till egna assets ska vara en konfigurationsändring.
-- **Spelstate är ren data.** Simuleringen är deterministisk, med fast tidssteg på **50 Hz** (PAL, samma takt som originalets VBlank-loop). Rendering och ljud läser state men ändrar den aldrig. Det gör nätspel och repris möjliga senare.
-- **Beteende dokumenteras före implementation.** Varje rutin vi kartlägger i `ns` beskrivs i `docs/re/` (vad den gör, variabler, konstanter). Go-koden skrivs från beskrivningen, inte genom att översätta assembler rad för rad. Det ger läsbar kod och håller isär "förstå" och "bygga".
-- **Facit är originalet i emulator.** WinUAE med samma ADF används för att jämföra beteende (hastigheter, timer, skador) och skärmbilder.
+- **The original files are read directly.** The game loads the files extracted from the disk in their original format (ILBM, JBOB, RoomData, sound). No conversion up front, so there is a single source of truth. The level matrix and other tables that live in `ns` are extracted by a tool into a data file of its own (`assets-local/extracted/`), so the game never has to read the binary.
+- **One asset loader with a replaceable source.** All reading goes through a `content` package that points at a directory. Switching to own assets is a configuration change.
+- **Game state is plain data.** The simulation is deterministic, with a fixed time step of **50 Hz** (PAL, the same rate as the original's VBlank loop). Rendering and sound read the state but never change it. That makes network play and replays possible later.
+- **Behaviour is documented before implementation.** Every routine we map in `ns` is described in `docs/re/` (what it does, variables, constants). The Go code is written from the description, not by translating assembler line by line. That gives readable code and keeps "understanding" and "building" apart.
+- **The reference is the original running in an emulator.** WinUAE with the same ADF is used to compare behaviour (speeds, timer, damage) and screenshots.
 
-## Teknik
+## Technology
 
-- **Go + Ebitengine** (`github.com/hajimehoshi/ebiten/v2`). Det ger fönster, skalning, input (tangentbord och handkontroll) och ljud på Windows utan cgo, och fungerar även på macOS, Linux och webben (WASM) om det blir aktuellt senare.
-- Intern upplösning **320 x 256** (PAL-skärm: 200 rader spelvy + HUD), skalad heltalsvis till fönstret.
-- Bilder hålls som palettindex (8 bitar) i minnet och färgläggs vid ritning. Det behövs för färgcykling (`CRNG`) och palettbyten, som originalet använder.
-- Ljud: originalets 8-bitars sampel spelas upp via en egen liten mixer med 4 kanaler (som Paula) ovanpå Ebitengines ljudström.
+- **Go + Ebitengine** (`github.com/hajimehoshi/ebiten/v2`). It provides a window, scaling, input (keyboard and gamepad) and sound on Windows without cgo, and also works on macOS, Linux and the web (WASM) if that becomes relevant later.
+- Internal resolution **320 x 256** (PAL screen: 200 lines of game view + HUD), scaled by integer factors to the window.
+- Images are kept as palette indices (8 bits) in memory and coloured at draw time. This is needed for colour cycling (`CRNG`) and palette switches, which the original uses.
+- Sound: the original's 8-bit samples are played through a small mixer of our own with 4 channels (like Paula) on top of Ebitengine's audio stream.
 
-## Paketstruktur
+## Package structure
 
 ```
 cmd/
-  game/          spelet
-  viewer/        verktyg: bläddra bland bilder, sprites, block och karta
-  extract/       verktyg: läs ut tabeller ur ns till assets-local/extracted/
+  game/          the game
+  viewer/        tool: browse pictures, sprites, blocks and the map
+  extract/       tool: read tables out of ns into assets-local/extracted/
 pkg/
-  amiga/         filformat: ilbm, jbob, sample, font, hunk
-  content/       asset-loader (källkatalog via config), cache
-  game/          spelstate och simulering (ren Go, inga Ebitengine-beroenden)
-    world/       karta, block, tiles, kollision
-    actor/       spelare, fiender, gisslan
-    item/        bomber, kort, sprängladdningar, vapen
-    flow/        speltillstånd: intro, spel, död, vinst, game over
-  input/         abstraktion: Action-flaggor per tick (tangentbord, kontroll, repris)
-  render/        ritar state: karta, sprites, HUD, skärmar, färgcykling
-  audio/         mixer, effekter, musik
-tools/           python-verktygen för reverse engineering (finns redan)
-docs/re/         beskrivningar av kartlagda rutiner
+  amiga/         file formats: ilbm, jbob, sample, font, hunk
+  content/       asset loader (source directory via config), cache
+  game/          game state and simulation (plain Go, no Ebitengine dependencies)
+    world/       map, blocks, tiles, collision
+    actor/       player, enemies, hostages
+    item/        bombs, cards, explosive charges, weapons
+    flow/        game states: intro, play, death, win, game over
+  input/         abstraction: Action flags per tick (keyboard, controller, replay)
+  render/        draws the state: map, sprites, HUD, screens, colour cycling
+  audio/         mixer, effects, music
+tools/           the Python tools for reverse engineering (already exist)
+docs/re/         descriptions of mapped routines
 ```
 
-`pkg/game` får inte importera `render`, `audio` eller Ebitengine. Det är det som håller state ren och testbar.
+`pkg/game` must not import `render`, `audio` or Ebitengine. That is what keeps the state clean and testable.
 
-## Faser
+## Phases
 
-Varje fas avslutas med något som går att köra och visa.
+Each phase ends with something that can be run and shown.
 
-### Fas 0: grund (liten)
+### Phase 0: foundation (small)
 
-- `git init`, Go-modul, Ebitengine, tomt fönster med fast tidssteg.
-- Lägg till `assets-local/extracted/` och ev. `cmd/*/`-binärer i `.gitignore`.
+- `git init`, a Go module, Ebitengine, an empty window with a fixed time step.
+- Add `assets-local/extracted/` and any `cmd/*/` binaries to `.gitignore`.
 
-**Klart när:** ett tomt fönster öppnas och loopen tickar 50 gånger per sekund.
+**Done when:** an empty window opens and the loop ticks 50 times per second.
 
-### Fas 1: filformat i Go (liten–medel)
+### Phase 1: file formats in Go (small to medium)
 
-- Porta de verifierade Python-tolkarna till `pkg/amiga`: ILBM (inkl. `CRNG`), JBOB, ljudformatet, 8x8-fonten.
-- `cmd/extract`: läs hunk-filen, plocka ut kartmatrisen (`$A333`, 29 x 208), blockkonstanterna och fler tabeller efterhand.
-- `cmd/viewer`: visa skärmbilder (med färgcykling), spritebankerna med index, block, och hela kartan med scrollning.
-- Enhetstester för varje format (storlekar, kända värden, t.ex. att alla 649 JBOB-poster validerar).
+- Port the verified Python parsers to `pkg/amiga`: ILBM (including `CRNG`), JBOB, the sound format, the 8x8 font.
+- `cmd/extract`: read the hunk file, pick out the level matrix (`$A333`, 29 x 208), the block constants and more tables as we go.
+- `cmd/viewer`: show full-screen pictures (with colour cycling), the sprite banks with indices, blocks, and the whole map with scrolling.
+- Unit tests for each format (sizes, known values, for example that all 649 JBOB records validate).
 
-**Klart när:** viewern visar hela banan med rätt färger och kan scrolla i den.
+**Done when:** the viewer shows the whole level with the right colours and can scroll in it.
 
-**Status (2026-10-05): klar.** `pkg/amiga` (IFF, ILBM med CRNG, JBOB med tile-planmask, ljud, font, hunk), `pkg/content` (loader med konfigurerbar rot), `pkg/game/world` (bana), `cmd/extract` (kartmatris, 7 paletter, startvy) och `cmd/viewer` (bilder med färgcykling, spritebanker, hela banan). Tilefärgerna är verifierade mot emulatorns skärm (98,5 % av pixlarna; resten är sprites). Bobs ritas ännu med den overifierade tolkningen.
+**Status (2026-10-05): done.** `pkg/amiga` (IFF, ILBM with CRNG, JBOB with the tile plane mask, sound, font, hunk), `pkg/content` (loader with a configurable root), `pkg/game/world` (level), `cmd/extract` (level matrix, 7 palettes, start view) and `cmd/viewer` (pictures with colour cycling, sprite banks, the whole level). The tile colours are verified against the emulator's screen (98.5 % of the pixels; the rest is sprites). Bobs are still drawn with the unverified interpretation.
 
-### Fas 2: kartläggning av spelets kärna (stor, pågår parallellt med fas 3–6)
+### Phase 2: mapping the core of the game (large, runs in parallel with phases 3 to 6)
 
-Det mest osäkra arbetet. Görs bit för bit i takt med att funktionerna behövs.
+The most uncertain work. Done piece by piece as the functions are needed.
 
-- Förbättra `tools/recdis.py`: en symbolfil (`adress → namn, kommentar`) som disassemblern läser in, så att listningen blir läsbar ju mer vi förstår. Följ hopptabeller för att öka täckningen över 64 %.
-- Kartlägg i ungefär denna ordning:
-  1. Huvudloop, VBlank-takt, speltillstånd (`$21EA`).
-  2. Inläsning av joystick och tangentbord (`$BFE001`, `$DFF00C`).
-  3. Spelarens rörelse, animationstabeller (troligen `NSIA`), kollision mot tiles.
-  4. Dörrar, hissar, trappor, kort.
-  5. Fiender: placering, beteende, skott, träffar.
-  6. Bomber, gisslan, timer, sprängladdningar, bomb-avvecklingsskärmen (`BB`).
-  7. Paletter, färgcykling, ljud- och musikuppspelning.
-- Varje område dokumenteras i `docs/re/<område>.md` innan det byggs.
+- Improve `tools/recdis.py`: a symbol file (`address -> name, comment`) that the disassembler reads in, so the listing becomes more readable the more we understand. Follow jump tables to raise coverage above 64 %.
+- Map in roughly this order:
+  1. Main loop, VBlank rate, game state (`$21EA`).
+  2. Reading the joystick and keyboard (`$BFE001`, `$DFF00C`).
+  3. The player's movement, animation tables (probably `NSIA`), collision against tiles.
+  4. Doors, lifts, stairs, cards.
+  5. Enemies: placement, behaviour, shots, hits.
+  6. Bombs, hostages, timer, explosive charges, the bomb defusing screen (`BB`).
+  7. Palettes, colour cycling, sound and music playback.
+- Each area is documented in `docs/re/<area>.md` before it is built.
 
-**Status (2026-10-05): pågår.** Skriptmotorn är kartlagd i stora delar och portad till Go (`pkg/game/script`). Den körs mot originalets bytekod och stämmer steg för steg med ett inspelat spår (gång höger + väggstopp). Se `docs/re/script-engine.md` och avsnittet "Nästa steg" i `README.md`. Insikten som förändrar planen: **beteende ligger till stor del i skript (data)**, så porten kör originalskripten i stället för att skriva om varje rörelse.
+**Status (2026-10-05): in progress.** The script engine is mapped in large part and ported to Go (`pkg/game/script`). It runs against the original's bytecode and matches a recorded trace step by step (walking right + stopping at a wall). See `docs/re/script-engine.md`. The insight that changes the plan: **behaviour lives largely in scripts (data)**, so the port runs the original scripts instead of rewriting every movement.
 
-### Fas 3: spelaren i världen (medel)
+### Phase 3: the player in the world (medium)
 
-- Inputabstraktion (`input.Actions` per tick) med tangentbord och handkontroll.
-- Kamera och scrollning som i originalet (startposition från `$8F56`/`$8F58`).
-- Spelarens rörelse, animationer och kollision enligt fas 2.
-- HUD (`NSIMenu`): vapen, magasin, våning, träffar, klocka.
+- An input abstraction (`input.Actions` per tick) with keyboard and gamepad.
+- Camera and scrolling as in the original (start position from `$8F56`/`$8F58`).
+- The player's movement, animations and collision according to phase 2.
+- HUD (`NSIMenu`): weapons, magazines, floor, hits, clock.
 
-**Klart när:** man kan gå runt i byggnaden och HUD:en uppdateras.
+**Done when:** you can walk around the building and the HUD updates.
 
-### Fas 4: interaktion (medel)
+### Phase 4: interaction (medium)
 
-- Dörrar och kort, hissar och trappor, våningsbyte.
-- Föremål: plocka upp magasin, sprängladdningar, kort.
+- Doors and cards, lifts and stairs, changing floors.
+- Items: picking up magazines, explosive charges, cards.
 
-### Fas 5: fiender och strid (medel–stor)
+### Phase 5: enemies and combat (medium to large)
 
-- Fiendernas placering, rörelse och AI.
-- Skott, träffar, död (`DO`-skärmen).
+- Enemy placement, movement and AI.
+- Shots, hits, death (the `DO` screen).
 
-### Fas 6: målen (medel)
+### Phase 6: the objectives (medium)
 
-- Bomber och nedräkningstimer, gisslan.
-- Bomb-avvecklingssekvensen (`BB`).
-- Vinst (`WT`), explosion (`ET`), game over (`EX`).
+- Bombs and the countdown timer, hostages.
+- The bomb defusing sequence (`BB`).
+- Win (`WT`), explosion (`ET`), game over (`EX`).
 
-### Fas 7: flöde och presentation (liten–medel)
+### Phase 7: flow and presentation (small to medium)
 
-- Titel (`NSILoader`), "tryck fire" (`PF`), intro (`IT`, `EN`, `HC`, `ST`), slutskärmar.
-- Färgcykling, övergångar.
+- Title (`NSILoader`), "press fire" (`PF`), intro (`IT`, `EN`, `HC`, `ST`), end screens.
+- Colour cycling, transitions.
 
-### Fas 8: ljud och musik (medel)
+### Phase 8: sound and music (medium)
 
-- Effekter från `NSISound`, `DAS`, `DBY`, `IAZ` (samplingsfrekvens och uppdelning bekräftas i fas 2).
-- Musik från `NSIMusicSound`. Formatet är okänt. Det kan vara en egen sequencer, och då är det en större uppgift.
+- Effects from `NSISound`, `DAS`, `DBY`, `IAZ` (the sample rate and the split are confirmed in phase 2).
+- Music from `NSIMusicSound`. The format is unknown. It may be a sequencer of its own, and in that case it is a larger task.
 
-### Fas 9: trohet och finslipning (medel)
+### Phase 9: fidelity and polish (medium)
 
-- Jämför mot WinUAE: hastigheter, timer, svårighet, skärmbilder.
-- Repristest: spela in input-sekvenser och verifiera att simuleringen ger samma state varje gång.
-- Inställningar: fönsterstorlek, tangenter, helskärm.
+- Compare against WinUAE: speeds, timer, difficulty, screenshots.
+- Replay test: record input sequences and verify that the simulation gives the same state every time.
+- Settings: window size, keys, full screen.
 
-### Fas 10: egna assets (senare, eget projekt)
+### Phase 10: own assets (later, a project of its own)
 
-- Ersätt grafik, ljud, texter och bana med eget material (se spelpaket).
-- Porten innehåller inga original-assets och inga data utlästa ur `ns`; de läses ur användarens egen diskett.
+- Replace graphics, sound, texts and level with own material (see the content pack).
+- The port contains no original assets and no data read out of `ns`; they are read from the user's own disk.
 
-## Tester
+## Tests
 
-- `pkg/amiga`: formattester mot de riktiga filerna. Hoppa över testet om `assets-local/` saknas, så att repot fungerar utan originalfilerna.
-- `pkg/game`: enhetstester för kollision, timer, bomblogik och skador. Använd små syntetiska kartor, inte originaldata.
-- Determinism: samma input-sekvens ska ge samma state-hash efter N tick.
+- `pkg/amiga`: format tests against the real files. Skip the test if `assets-local/` is missing, so that the repository works without the original files.
+- `pkg/game`: unit tests for collision, timer, bomb logic and damage. Use small synthetic maps, not original data.
+- Determinism: the same input sequence must give the same state hash after N ticks.
 
-## Risker
+## Risks
 
-| Risk | Påverkan | Åtgärd |
+| Risk | Impact | Action |
 |---|---|---|
-| Spellogiken är svårare att kartlägga än väntat (handskriven assembler, inga symboler) | Fas 2 drar ut på tiden | Symbolfil och iterativ kartläggning; jämför mot emulator i stället för att förstå allt i detalj |
-| Musikformatet är en egen sequencer | Fas 8 växer | Gör musiken sist; spelet fungerar utan |
-| Saknad fil `HK` refereras i koden | Någon skärm kan saknas | Kontrollera i fas 7 när den laddas; ev. annan diskettversion |
-| Beteende som beror på Amiga-timing (räknarloopar, blitter-väntan) | Fel takt | Allt kopplas till 50 Hz-tick; mät mot emulator |
-| Rättigheterna klaras inte | Porten med originaldata kan inte släppas | Håll allt lokalt; fas 10 ger en publicerbar version |
+| The game logic is harder to map than expected (hand-written assembler, no symbols) | Phase 2 takes longer | A symbol file and iterative mapping; compare against the emulator instead of understanding everything in detail |
+| The music format is a sequencer of its own | Phase 8 grows | Do the music last; the game works without it |
+| The missing file `HK` is referred to in the code | A screen may be missing | Check in phase 7 when it is loaded; possibly another disk version |
+| Behaviour that depends on Amiga timing (counter loops, blitter waits) | Wrong pace | Tie everything to 50 Hz ticks; measure against the emulator |
 
-## Beslut (2026-10-05)
+## Decisions (2026-10-05)
 
-- Porten är en identisk Go-port. Motorn kan senare användas för egna varianter.
-- Ebitengine används.
-- Port 1 ska vara **identisk** med originalet så långt det går. Avvikelser dokumenteras.
-- En emulator (WinUAE) är facit för testerna.
-- Mekaniken i `pkg/game` ska gå att återanvända i den egna varianten, så den hålls fri från plattformsberoenden.
+- The port is an identical Go port. The engine can later be used for own variants.
+- Ebitengine is used.
+- The port should be **identical** to the original as far as possible. Deviations are documented.
+- An emulator (WinUAE) is the reference for the tests.
+- The mechanics in `pkg/game` should be reusable in an own variant, so they are kept free of platform dependencies.

@@ -1,8 +1,8 @@
-# Skriptspråket: skriv beteende med vanliga ord
+# The script language: write behaviour in plain words
 
-Skript beskriver hur en gestalt beter sig: vilken bild den visar, hur den rör sig och vad den väntar på. Du skriver dem som text i `scripts/*.gs` i ett spelpaket. Språket har vanliga ord, namn på tal, bilder och ljud, och mallar för det som upprepas. Motorns egna instruktioner (opkoder) behöver du inte känna till; de finns i `docs/script-reference.md` om du vill.
+A script describes how a figure behaves: which image it shows, how it moves and what it waits for. You write scripts as text in `scripts/*.gs` in a content pack. The language has plain words, names for numbers, images and sounds, and templates for whatever repeats. You do not need to know the engine's own instructions (opcodes); they are in `docs/script-reference.md` if you want them.
 
-Exempel, en gång i trappan upp åt höger:
+Example, one go up the stairs to the right:
 
 ```
 script stairs_up_r
@@ -18,52 +18,52 @@ script stairs_up_r
     goto level_out_r
 ```
 
-Allt efter `;` på en rad är kommentar. Mellanslag och tomma rader spelar ingen roll. Ord skrivs med små bokstäver.
+Everything after `;` on a line is a comment. Spaces and blank lines do not matter. Words are written in lower case.
 
-## Tid och rörelse
+## Time and movement
 
-Spelet går 50 bildrutor (ticks) i sekunden. Ett skript körs tills det väntar; nästa tick fortsätter det därifrån.
+The game runs 50 frames (ticks) per second. A script runs until it waits; on the next tick it continues from there.
 
-| Skriv | Betydelse |
+| Write | Meaning |
 |---|---|
-| `wait` / `wait 5` / `wait 5 ticks` | vänta en eller flera ticks |
-| `show POSE` / `show legs=A body=B` | visa en bild (ben och överkropp) |
-| `hold POSE for 6 ticks` | visa och vänta |
-| `hold legs=A body=B for 4 ticks moving right` | och flytta figuren en pixel per tick åt höger (`left`, `up`, `down`, eller `up-right`, `down-left` och så vidare) |
-| `... moving up-right every 3 ticks` | ett steg var tredje tick i stället för varje |
-| `place legs X Y` / `place body X Y` | var benen och överkroppen sitter, i pixlar från figurens läge (överkroppen brukar sitta 16 uppåt: `place body 0 -16`) |
-| `move right 4` | fyra pixlar åt höger, en per tick (`left`, `up`, `down`) |
-| `move up 4 camera` | och vyn följer med |
-| `step right` | ett steg på en gång utan att vänta |
-| `camera follow right` | vyn följer med, en pixel per tick (`every N ticks`, `speed N`; riktningar som ovan) |
-| `camera stop` / `camera nudge up` | sluta följa / ett steg för vyn |
-| `face right` / `face left` | vänd figuren (det styr också vad den känner av framför sig; spelarens vänteläge gör det varje tick) |
+| `wait` / `wait 5` / `wait 5 ticks` | wait one or more ticks |
+| `show POSE` / `show legs=A body=B` | show an image (legs and upper body) |
+| `hold POSE for 6 ticks` | show and wait |
+| `hold legs=A body=B for 4 ticks moving right` | and move the figure one pixel per tick to the right (`left`, `up`, `down`, or `up-right`, `down-left` and so on) |
+| `... moving up-right every 3 ticks` | one step every third tick instead of every tick |
+| `place legs X Y` / `place body X Y` | where the legs and the upper body sit, in pixels from the figure's position (the upper body usually sits 16 up: `place body 0 -16`) |
+| `move right 4` | four pixels to the right, one per tick (`left`, `up`, `down`) |
+| `move up 4 camera` | and the view follows |
+| `step right` | one step at once without waiting |
+| `camera follow right` | the view follows, one pixel per tick (`every N ticks`, `speed N`; directions as above) |
+| `camera stop` / `camera nudge up` | stop following / one step for the view |
+| `face right` / `face left` | turn the figure (this also controls what it senses in front of it; the player's idle state does it every tick) |
 
-## Bilder, ljud och namn
+## Images, sounds and names
 
 ```
-const walk_ticks = 4              ; ett namn på ett tal (tal, eller summor och produkter: walk_ticks*2+1)
-sound pistol = 0                  ; ett namn på en ljudeffekt (filen sounds/0.wav)
-pose stand legs=0 body=64         ; ett namn på ett par bilder
+const walk_ticks = 4              ; a name for a number (numbers, or sums and products: walk_ticks*2+1)
+sound pistol = 0                  ; a name for a sound effect (the file sounds/0.wav)
+pose stand legs=0 body=64         ; a name for a pair of images
 ```
 
-Ett namn kan användas överallt där ett tal väntas. Bildnummer är numren på filerna i `sprites/`. Vapnet lägger sedan till sin bas på varje bild: `weapon sprites legs=0 body=64` betyder att överkroppen visas som bild 64 med pistol, 128 med hagelbössa och 192 med gevär.
+A name can be used anywhere a number is expected. Image numbers are the numbers of the files in `sprites/`. The weapon then adds its base to each image: `weapon sprites legs=0 body=64` means that the upper body is shown as image 64 with the pistol, 128 with the shotgun and 192 with the rifle.
 
-| Skriv | Betydelse |
+| Write | Meaning |
 |---|---|
-| `play pistol` | spela ljudet (kanal 0). `play lift_motor channel 1 looping` låter det gå om och om igen |
-| `footstep`, `stairstep` | nästa fotsteg eller trappsteg ur ljudlistan (`program.json`) |
-| `start sound` | starta ljudet som `fire weapon` har laddat |
+| `play pistol` | play the sound (channel 0). `play lift_motor channel 1 looping` makes it go round and round |
+| `footstep`, `stairstep` | the next footstep or stair step from the sound list (`program.json`) |
+| `start sound` | start the sound that `fire weapon` has loaded |
 
-## Upprepning och mallar
+## Repetition and templates
 
 ```
-repeat 8 times as i               ; i räknar 0 till 7 och kan användas som ett tal
+repeat 8 times as i               ; i counts 0 to 7 and can be used as a number
     hold legs=1+i body=64 for 4 ticks moving right
 end
 ```
 
-Det som skiljer tre vapens skript åt är ett ljud och vilket skript som kommer sedan, så de skrivs en gång som en mall och används tre gånger:
+What separates the scripts of three weapons is a sound and which script comes next, so they are written once as a template and used three times:
 
 ```
 template fire_right effect
@@ -75,70 +75,68 @@ script fire_r_0 from fire_right effect=pistol
 script fire_r_1 from fire_right effect=shotgun
 ```
 
-Mallens parametrar byts ut överallt där de står som ett helt ord (i `key=värde` byts bara värdet). Ge dem därför namn som inte också är ord i språket. `self` är skriptets eget namn.
+A template's parameters are replaced everywhere they appear as a whole word (in `key=value` only the value is replaced). Give them names that are not also words in the language. `self` is the script's own name.
 
-## Hopp
+## Jumps
 
-| Skriv | Betydelse |
+| Write | Meaning |
 |---|---|
-| `goto NAMN` | fortsätt i ett annat skript |
-| `call NAMN` / `return` | gör ett annat skript och kom tillbaka (en nivå) |
-| `if holding right and path_clear goto NAMN` | om man håller höger och vägen är fri (`left`) |
-| `if rolling goto NAMN` | om man håller ned medan man går: rulla |
-| `branch fire=A idle=B` | skjuter man: A; gör man ingenting: B (direkt, utan att vänta: vänta själv först); annars vidare |
-| `branch fire=A down=B` | skjuter man: A; håller man ned: B; annars vidare |
-| `controls facing right right=A left=B ... default=C` | spelarens knappar, se nedan |
-| `resume controls right` | tillbaka till spelarens knappar (`left`). Det går bara åt ett håll som spelaren redan har stått vänd åt |
+| `goto NAME` | continue in another script |
+| `call NAME` / `return` | run another script and come back (one level) |
+| `if holding right and path_clear goto NAME` | if right is held and the way is clear (`left`) |
+| `if rolling goto NAME` | if down is held while walking: roll |
+| `branch fire=A idle=B` | if shooting: A; if doing nothing: B (at once, without waiting: wait first yourself); otherwise continue |
+| `branch fire=A down=B` | if shooting: A; if holding down: B; otherwise continue |
+| `controls facing right right=A left=B ... default=C` | the player's buttons, see below |
+| `resume controls right` | back to the player's buttons (`left`). This only works in a direction the player has already stood facing |
 
-### Spelarens knappar
+### The player's buttons
 
-Spelarens vänteläge är ett skript som börjar med `controls`. Varje `nyckel=skript` säger vilket skript en inmatning startar; det som inte anges får `default=`. Nycklarna är:
+The player's idle state is a script that begins with `controls`. Each `key=script` says which script an input starts; whatever is not given gets `default=`. The keys are:
 
-`right`, `left` (gå eller vända), `up_stairs` (upp framför trappa), `up_ladder`, `lift_call` (första trycket vid hissen), `lift_ready` (när hissen är där), `charge` (mellanslag), `down_stairs`, `down_ladder`, `duck` (ned), `after_roll`, `fire`.
+`right`, `left` (walk or turn), `up_stairs` (up in front of stairs), `up_ladder`, `lift_call` (the first press at the lift), `lift_ready` (when the lift is there), `charge` (space), `down_stairs`, `down_ladder`, `duck` (down), `after_roll`, `fire`.
 
-Om ingenting trycks fortsätter skriptet under raden: visa stående bild, kontrollera träffar, `wait` och `goto self`.
+If nothing is pressed the script continues on the line below: show the standing image, check hits, `wait` and `goto self`.
 
-## Strid
+## Combat
 
-| Skriv | Betydelse |
+| Write | Meaning |
 |---|---|
-| `check hits damage=1 right_hurt=A right_dead=B left_hurt=C left_dead=D` | har en fiende skjutit: ta skadan; den som tar skadan går till A (träffad från höger) eller B (död), C och D från vänster |
-| `back from hit` | tillbaka till där träffkontrollen stod |
-| `fire weapon sound=S empty=SKRIPT` | ta ett skott ur magasinet (ladda om ur reserven; är allt slut gå till SKRIPT) |
-| `shoot right` / `shoot left` | skottet går: närmaste fiende åt det hållet träffas. `second_death` ger fienden dess andra dödsskript |
-| `game over explosion` | spelet är slut (explosionsslutet) |
+| `check hits damage=1 right_hurt=A right_dead=B left_hurt=C left_dead=D` | if an enemy has fired: take the damage; the one who takes the damage goes to A (hit from the right) or B (dead), C and D from the left |
+| `back from hit` | back to where the hit check stood |
+| `fire weapon sound=S empty=SCRIPT` | take a shot from the magazine (reload from the reserve; if everything is gone go to SCRIPT) |
+| `shoot right` / `shoot left` | the shot goes: the nearest enemy in that direction is hit. `second_death` gives the enemy its second death script |
+| `game over explosion` | the game is over (the explosion ending) |
 
-Fiender:
+Enemies:
 
-| Skriv | Betydelse |
+| Write | Meaning |
 |---|---|
-| `enemy shoots` | fienden skjuter mot spelaren |
-| `enemy revives` | börja om från huvudskriptet |
-| `remove actor` | fienden är borta (och blir kvar som en bild på marken) |
+| `enemy shoots` | the enemy shoots at the player |
+| `enemy revives` | start over from the main script |
+| `remove actor` | the enemy is gone (and stays behind as an image on the ground) |
 
-En fiendemall i `program.json` anger skripten en fiende startar med: `start` (gå in), och `scripts`: huvudskript (siktar), efter skott, två dödsskript, skadad.
+An enemy template in `program.json` gives the scripts an enemy starts with: `start` (walk in), and `scripts`: main script (aiming), after a shot, two death scripts, hurt.
 
-## Laddningar, hiss och dörrar
+## Charges, lift and doors
 
-| Skriv | Betydelse |
+| Write | Meaning |
 |---|---|
-| `place charge` | lägg en sprängladdning där figuren står |
-| `charge show` / `charge explodes` | visa den / den går av (dödar den som står på den, annars öppnas dörren) |
-| `cabin picture N` | hisskorgens (och laddningens) bild: frame 622 + N |
-| `lift cabin show` / `hide` / `up` / `down` | visa, göm, flytta korgen en våning |
-| `lift cabin 0` ... `3` | starta ett av hissens fyra korgskript (`program.json`) |
-| `lift called` / `busy` / `gone` | hissen är kallad / upptagen / borta |
-| `lift choose up=A down=B` | upp eller ned om det finns en hissruta en våning över eller under |
-| `lift exit_check` | känn efter om man trycker fire (stanna vid nästa våning) |
-| `lift board_up` / `board_down` | i slutet av en våning: åk vidare om det finns mer hiss (hissruta 0x29), annars stanna (0x2A) |
-| `show actor` / `hide actor` | visa eller göm figuren (i hissen) |
+| `place charge` | lay an explosive charge where the figure stands |
+| `charge show` / `charge explodes` | show it / it goes off (kills whoever stands on it, otherwise the door opens) |
+| `cabin picture N` | the image of the lift cabin (and the charge): frame 622 + N |
+| `lift cabin show` / `hide` / `up` / `down` | show, hide, move the cabin one floor |
+| `lift cabin 0` ... `3` | start one of the lift's four cabin scripts (`program.json`) |
+| `lift called` / `busy` / `gone` | the lift is called / busy / gone |
+| `lift choose up=A down=B` | up or down depending on whether there is a lift tile one floor above or below |
+| `lift exit_check` | check whether fire is pressed (stop at the next floor) |
+| `lift board_up` / `board_down` | at the end of a floor: continue if there is more lift (lift tile 0x29), otherwise stop (0x2A) |
+| `show actor` / `hide actor` | show or hide the figure (in the lift) |
 
+## The program: program.json
 
+Besides the scripts, the engine needs to know which ones are its entry points. `program.json` points them out by name: `player` (the first script), `idle` (the idle state per direction and weapon), `lift_call`, `lift_recall`, `cabin` (four), `lift_helper`, `charge`, `blown_up`, `step_sounds` and `stair_sounds` (sound lists: `data name 11 12 13 0`), `contact_right`, `contact_left`, `player_frames`, `mag_size`, the enemy templates (`first_right`, `first_left`, `wave_right`, `wave_left`) and `wave_order`.
 
-## Programmet: program.json
+## Checking and errors
 
-Förutom skripten behöver motorn veta vilka som är dess ingångar. `program.json` pekar ut dem med namn: `player` (första skriptet), `idle` (vänteläget per håll och vapen), `lift_call`, `lift_recall`, `cabin` (fyra), `lift_helper`, `charge`, `blown_up`, `step_sounds` och `stair_sounds` (ljudlistor: `data namn 11 12 13 0`), `contact_right`, `contact_left`, `player_frames`, `mag_size`, fiendemallarna (`first_right`, `first_left`, `wave_right`, `wave_left`) och `wave_order`.
-
-## Kontroll och fel
-
-`go run ./cmd/scriptasm asm <katalog>` sätter ihop skripten och visar fel med fil och rad. `go run ./cmd/packtool check <paket>` gör det som spelet gör.
+`go run ./cmd/scriptasm asm <directory>` assembles the scripts and shows errors with file and line. `go run ./cmd/packtool check <pack>` does what the game does.

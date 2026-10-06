@@ -1,30 +1,30 @@
-# Genomspelningen (end-to-end-testet)
+# The playthrough (the end-to-end test)
 
-`pkg/solve` spelar spelet med en bot och `cmd/solve` spelar in de inputs som vinner det. `TestPlaythrough` (`pkg/solve/playthrough_test.go`) spelar upp inspelningen i ett nytt spel och kontrollerar att spelet tar slut med vinst.
+`pkg/solve` plays the game with a bot, and `cmd/solve` records the inputs that win it. `TestPlaythrough` (`pkg/solve/playthrough_test.go`) replays the recording in a new game and checks that the game ends in a win.
 
-## Vad testet bevisar
+## What the test proves
 
-- Hela spelet går att spela klart från start till slut: kort, vapen, dörrar (även den som måste sprängas), hissar, trappor, bomben, trådklippningen och slutskärmarna.
-- Simuleringen är deterministisk. Uppspelningen håller bara om varje tick beter sig exakt som när inspelningen gjordes (42 000 ticks).
-- Inga ej portade opkoder nås längs vägen.
+- The whole game can be played from start to end: cards, weapons, doors (including the one that has to be blown open), lifts, stairs, the bomb, the wire cutting and the ending screens.
+- The simulation is deterministic. The replay only holds if every tick behaves exactly as it did when the recording was made (72,642 ticks).
+- No unported opcodes are reached along the way.
 
-Testet jämför inte mot originalet. Det bevisar att porten är komplett och stabil, inte att den är identisk.
+The test does not compare against the original. It proves that the port is complete and stable, not that it is identical.
 
-## Inspelningen
+## The recording
 
-`pkg/solve/testdata/playthrough.txt` innehåller bara vad spelaren tryckte (en run-length-kodad lista `värde:antal`). Den innehåller ingen speldata och kan checkas in. Den hålls i synk med spelet genom att köra om `go run ./cmd/solve` när spelreglerna ändras (testet failar annars).
+`pkg/solve/testdata/playthrough.txt` contains only what the player pressed (a run-length coded list of `value:count`). It contains no game data and can be checked in. It is kept in step with the game by running `go run ./cmd/solve` again whenever the rules change (the test fails otherwise).
 
-Inspelningen använder osårbarhetsfusket som första input (F5), så den kräver `-improvements` på. Fusktangenten är en vanlig input, så uppspelningen är fortfarande bara inputs.
+The recording uses the invulnerability cheat as its first input (F5), so it needs `-improvements` on. The cheat key is an ordinary input, so the replay is still just inputs.
 
-## Boten
+## The bot
 
-- **Makron.** Botten gör en sak i taget från ett stillastående läge: ta ett steg eller flera åt höger eller vänster, upp eller ned (trappa, stege, dörr), åka hissen ett visst antal våningar, eller placera en sprängladdning på en låst dörr och backa undan. Därefter väntar den tills gubben står still.
-- **Strid.** Boten skjuter ned fiender som en reflex: den vänder sig mot närmaste, väljer bästa vapnet med ammunition (hagelbössan dödar med ett skott) och skjuter. Gå-makron bryr sig inte om fiender, eftersom boten är osårbar och fiender bara blockerar trappor, hissar och dörrar. De makrona rensar först.
-- **Sökning.** Sökningen jobbar på kopior av spelet (`State.Clone`) och är bredden först eller A* med en nivåkarta som ledtråd. Nivåkartan (`BuildGraph`, 6 000 lägen) byggs en gång av en fullt utrustad spelare och sparas i `assets-local/solve/graph.json`.
-- **Plan.** Först hämtas korten och vapnen, och ammunition tills förrådet räcker (de sista korridorerna skickar vågor av fiender). Därefter går boten till bomben, spränger dörren, klipper rätt tråd och ser slutet.
+- **Macros.** The bot does one thing at a time from a standing position: take one or more steps right or left, up or down (stairs, ladder, door), ride the lift a number of floors, or lay a charge on a locked door and back away. Then it waits until the player stands still.
+- **Fighting.** The bot shoots enemies as a reflex: it turns towards the nearest, picks the best weapon that has ammunition (the shotgun kills with one shot) and fires. The walking macros ignore enemies, because the bot is invulnerable and enemies only block stairs, lifts and doors. Those macros clear them first.
+- **Search.** The search works on copies of the game (`State.Clone`) and is breadth first or A* with a map of the level as a hint. The map (`BuildGraph`, 6,000 states) is built once by a fully equipped player and saved in `assets-local/solve/graph.json`.
+- **Plan.** First the cards and weapons are collected, and ammunition until the supply is enough (the last corridors send waves of enemies). Then the bot goes to the bomb, blows the door, cuts the right wire and sees the ending.
 
-## Kända begränsningar
+## Known limitations
 
-- Tryck på en riktningsknapp i vissa vänteställen (efter att ha skjutit) vänder bara gubben, så makrons resultat beror på skriptläget. Botten behandlar skriptläget som en del av läget, och sökningen körs alltid på riktiga tillstånd.
-- Inspelningen besöker 28 av 63 rum. Alla rum hinns inte med på spelets 25 minuter med den här ruttplaneringen: vägen till bomben tar ca 12 000 ticks och ett rum kostar i snitt ca 1 600. Kommandot `go run ./cmd/solve -reserve 0` spelar i stället in den kortaste vinsten (14 rum, ca 42 000 ticks).
-- Inspelningen slutar med ca 17 sekunder kvar på klockan, så varje ändring av spelets takt eller regler gör att den måste spelas in på nytt.
+- Pressing a direction in some waiting states (after shooting) only turns the player, so the result of a macro depends on the script state. The bot treats the script state as part of the state, and the search always runs on real states.
+- The recording visits 28 of 63 rooms. Not all rooms fit in the game's 25 minutes with this route planning: the way to the bomb takes about 12,000 ticks and a room costs about 1,600 on average. The command `go run ./cmd/solve -reserve 0` records the shortest win instead (14 rooms, about 42,000 ticks).
+- The recording ends with about 17 seconds left on the clock, so every change to the game's pace or rules means it has to be recorded again.

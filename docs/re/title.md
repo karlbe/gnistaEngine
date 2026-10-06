@@ -1,37 +1,37 @@
-# Titelsekvensen (`$6690`, `$6852`)
+# The title sequence (`$6690`, `$6852`)
 
-Status: portad i `pkg/title` och `pkg/render/title.go`. Ordningen och bilderna är **verifierade** mot originalet (cold boot i WinUAE med skärmbilder var halv sekund); siluettens slutpose uppmättes mot emulatorn (`$7396`). Tiderna är **hämtade ur väntesilingorna i koden**, inte uppmätta.
+Status: ported in `pkg/title` and `pkg/render/title.go`. The order and the pictures are **verified** against the original (a cold boot in WinUAE with a screenshot every half second); the silhouette's final pose was measured against the emulator (`$7396`). The timings are **taken from the delay loops in the code**, not measured.
 
-## Bilderna (alla 320 x 200, 5 bitplan)
+## The pictures (all 320 x 200, 5 bitplanes)
 
-| Fil | Innehåll |
+| File | Contents |
 |---|---|
-| `NSILoader` | titelbilden med logotypen |
-| `IT` | inledningstexten (en textsida som sätter scenen) |
-| `TA` | siluetten av en man med gevär. Bilden använder bara jämna färgindex (0, 2, ... 14) |
-| `PF` | uppmaningen att trycka fire för att börja |
-| `ST` | berättelsen om hur spelaren hamnar på oljeriggen, som visas medan spelet laddas |
+| `NSILoader` | the title picture with the logo |
+| `IT` | the introduction text (a page of text that sets the scene) |
+| `TA` | the silhouette of a man with a rifle. The picture only uses even colour indices (0, 2, ... 14) |
+| `PF` | the prompt to press fire to begin |
+| `ST` | the story of how the player ends up on the oil rig, shown while the game loads |
 
-## Ordningen
+## The order
 
-1. Logotypen (`NSILoader`), svart och sedan bilden med sin egen palett. Väntesilja på `$10C8E0` varv.
-2. Svart, sedan `IT` med sin egen palett. Väntesilja på `$186A00` varv.
-3. Svart, sedan `TA`. Dess egen palett är bara platshållare. Färgerna kommer från fem palettabeller i koden som byts med en kort väntan emellan (`$C350` varv): `$7316`, `$7356`, `$7396`, `$7356`, `$7396`. Tabellerna ger siluetten tre olika poser (armen och geväret höjs), mot röd bakgrund. Slutposen är `$7396`.
-4. Rullande krediter (`$6852`) över siluetten tills texten är slut eller fire trycks.
-5. "Press fire" (`PF`), väntar på fire. Fire under kreditrullningen hoppar direkt till steg 6.
-6. Berättelsen (`ST`) medan spelet laddas (`$682A`). Porten väntar på fire, eftersom laddningen inte återskapas.
+1. The logo (`NSILoader`), black and then the picture with its own palette. A delay loop of `$10C8E0` iterations.
+2. Black, then `IT` with its own palette. A delay loop of `$186A00` iterations.
+3. Black, then `TA`. Its own palette is only a placeholder. The colours come from five palette tables in the code, which are switched with a short wait between them (`$C350` iterations): `$7316`, `$7356`, `$7396`, `$7356`, `$7396`. The tables give the silhouette three different poses (the arm and the rifle are raised), against a red background. The final pose is `$7396`.
+4. Rolling credits (`$6852`) over the silhouette until the text is over or fire is pressed.
+5. "Press fire" (`PF`), waits for fire. Fire during the credits jumps straight to step 6.
+6. The story (`ST`) while the game loads (`$682A`). The port waits for fire, because the loading is not reproduced.
 
-## Kreditrullningen
+## The credits roll
 
-- Texten ligger på `$9D82`: rader som slutar med 0, och en rad som börjar med `$01` avslutar. 89 rader. Den innehåller bland annat krediterna för den som knäckte spelet, så den läses ur koden vid körning och bäddas inte in.
-- Varje rad skrivs med 6 pixlars teckenavstånd på x = `$1E`, y = `$C9` (strax under bildens 200 rader). Efter varje rad skrivs inget nytt förrän textlagret har rullat 15 steg (`$68A2`-`$68C4`), ett steg per pass av en silja på `$300C` varv (`$9D6C` flyttar lagret en pixel uppåt). Det blir ungefär 2,34 bildrutor per pixel, alltså drygt en minut för hela texten.
-- Texten är ett eget lager i bitplanet som siluetten lämnar ledigt: en textpixel gör bildens (jämna) index till nästa udda index, som palettabellerna färgar vitt. Därför ligger texten ovanpå siluetten utan att dölja den.
+- The text is at `$9D82`: lines that end with 0, and a line that begins with `$01` ends it. 89 lines. It is credits text, so it is read from the code at run time and is not embedded.
+- Each line is written with a character spacing of 6 pixels at x = `$1E`, y = `$C9` (just below the picture's 200 lines). After each line nothing new is written until the text layer has rolled 15 steps (`$68A2`-`$68C4`), one step per pass of a delay of `$300C` iterations (`$9D6C` moves the layer one pixel up). That is roughly 2.34 frames per pixel, a little more than a minute for the whole text.
+- The text is a layer of its own in the bitplane that the silhouette leaves free: a text pixel turns the picture's (even) index into the next odd index, which the palette tables colour white. The text therefore lies on top of the silhouette without hiding it.
 
-## Väntetider
+## Waiting times
 
-Väntesiljorna är `subi.l #1,d0 / bne` och går ungefär 5263 varv per bildruta (samma värde som slutet använder): logotypen ca 209 bildrutor, inledningstexten ca 304, varje pose 10, mellan sidorna 19.
+The delay loops are `subi.l #1,d0 / bne` and run about 5263 iterations per frame (the same value that the ending uses): the logo about 209 frames, the introduction text about 304, each pose 10, between the pages 19.
 
-## Avvikelser
+## Deviations
 
-- Fire hoppar till nästa sida från alla skärmar (originalet läser bara fire under krediterna och på "press fire"). Esc hoppar över hela titeln och `-title=false` stänger av den (körningar med `-ticks`, `-shot`, `-load`, `-inputs` eller `-hold` startar i spelet om inte `-title` anges).
-- Diskettladdningstiderna återskapas inte, och musiken finns inte än. Originalet väntar också på en flagga som musiken sätter (`$9A88`) innan "press fire" visas, vilket porten ersätter med att visa den när krediterna är slut.
+- Fire goes to the next page from all screens (the original only reads fire during the credits and on "press fire"). Esc skips the whole title and `-title=false` switches it off (runs with `-ticks`, `-shot`, `-load`, `-inputs` or `-hold` start in the game unless `-title` is given).
+- The disk loading times are not reproduced. The original also waits for a flag that the music sets (`$9A88`) before "press fire" is shown, which the port replaces by showing it when the credits are over.

@@ -1,45 +1,45 @@
-# Automatiska tester mot originalet i WinUAE
+# Automatic tests against the original in WinUAE
 
-Originalspelet i WinUAE är facit för port 1. `tools/uae/uaectl.py` startar och styr emulatorn utan GUI och utan att någon sitter vid datorn.
+The original game in WinUAE is the reference for the port. `tools/uae/uaectl.py` starts and controls the emulator without a GUI and without anyone sitting at the computer. It needs your own copy of the game disk and a Kickstart ROM, neither of which is part of this repository.
 
-## Förutsättningar
+## What you need
 
-- WinUAE 5.3: `E:\Spel\Amiga\WinUAE\winuae64.exe` (kan ändras med miljövariabeln `WINUAE`).
-- Kickstart 1.3 (34.5, okrypterad, 256K): `E:\Spel\Amiga\Kickstart v1.3 r34.5 (1987)(Commodore)(A500-A1000-A2000-CDTV)[!].rom`. Filen `Kickstart 1.3.rom` (512K) ska **inte** användas, eftersom den ger en ROM-nyckelvarning.
-- Konfiguration: `assets-local/uae/pgi.uae`. Det är en A500 med OCS, 68000, cykelexakt, 512K chip + 512K slow, spelets ADF i df0, inget ljud, `gfx_api=gdi`, joystick i port 2 på piltangenter + höger Ctrl (`kbd2`).
-- Allt under `assets-local/uae/` (konfiguration, savestate, skärmbilder) är lokalt och committas inte.
+- WinUAE 5.3 (the path can be set with the environment variable `WINUAE`).
+- A Kickstart 1.3 ROM (34.5, unencrypted, 256K). A 512K `Kickstart 1.3.rom` should **not** be used, because it gives a ROM key warning.
+- A configuration: `assets-local/uae/pgi.uae`. It is an A500 with OCS, 68000, cycle exact, 512K chip + 512K slow, the game's ADF in df0, no sound, `gfx_api=gdi`, and a joystick in port 2 on the arrow keys + right Ctrl (`kbd2`).
+- Everything under `assets-local/uae/` (configuration, savestate, screenshots) is local and is not committed.
 
-## Kommandon
+## Commands
 
 ```
-py tools/uae/uaectl.py boot              kallstart, tryck fire genom intro, spara assets-local/uae/ingame.uss
-py tools/uae/uaectl.py launch [--fresh]  starta från ingame.uss (eller kallstart) och låt den köra
-py tools/uae/uaectl.py watch [ADDR...]   koppla upp mot en körande WinUAE och skriv ut variabler när de ändras
-py tools/uae/uaectl.py shot FIL.png      koppla upp och ta en skärmbild
+py tools/uae/uaectl.py boot              cold start, press fire through the intro, save assets-local/uae/ingame.uss
+py tools/uae/uaectl.py launch [--fresh]  start from ingame.uss (or cold start) and let it run
+py tools/uae/uaectl.py watch [ADDR...]   attach to a running WinUAE and print variables when they change
+py tools/uae/uaectl.py shot FILE.png     attach and take a screenshot
 ```
 
-`watch` utan adresser visar `$21EA` (utfall), `$8F56/$8F58` (vyposition) och `$8F72/$8F74` (blockkoordinater). Den fungerar medan man spelar själv, så att man kan se vad som händer i minnet när man t.ex. tar en hiss.
+`watch` without addresses shows `$21EA` (outcome), `$8F56/$8F58` (view position) and `$8F72/$8F74` (block coordinates). It works while you play yourself, so you can see what happens in memory when, say, you take a lift.
 
-## Hur det fungerar
+## How it works
 
-**Start.** WinUAE startas med `-f pgi.uae` och `-s nyckel=värde` för överstyrningar. Ett savestate laddas med `-s statefile=...`, eftersom flaggan `-statefile` ignoreras tillsammans med `-f`. Boot använder turbo-diskladdning (`floppy_speed=0`), vilket bara påverkar laddning, inte spelet. Varningsdialoger klickas bort automatiskt. Fokus lämnas tillbaka till det fönster användaren hade.
+**Starting.** WinUAE is started with `-f pgi.uae` and `-s key=value` for overrides. A savestate is loaded with `-s statefile=...`, because the flag `-statefile` is ignored together with `-f`. Boot uses turbo disk loading (`floppy_speed=0`), which only affects loading, not the game. Warning dialogs are clicked away automatically. Focus is handed back to the window the user had.
 
-**Minne.** WinUAE mappar Amiga-adressrymden linjärt i sitt processminne (`host = bas + Amiga-adress`). Verktyget letar upp den körande, relokerade kodhunken i `ns` (filnamnstabellen plus samstämmiga relokeringar, så att orelokerade kopior i DOS-buffertar avvisas). Därefter läses och skrivs spelets variabler med samma hunk-relativa adresser som i `docs/re/`. Hunken laddas på olika adresser i olika körningar (t.ex. `$C08708`, `$C08738`), men sökningen hanterar det. Chip-RAM nås via samma bas, vilket är verifierat med ExecBase och `ChkBase`.
+**Memory.** WinUAE maps the Amiga address space linearly in its process memory (`host = base + Amiga address`). The tool finds the running, relocated code hunk of `ns` (the file name table plus matching relocations, so that unrelocated copies in DOS buffers are rejected). It then reads and writes the game's variables with the same hunk-relative addresses as in `docs/re/`. The hunk is loaded at different addresses in different runs (for example `$C08708`, `$C08738`), but the search handles that. Chip RAM is reached through the same base, which is verified with ExecBase and `ChkBase`.
 
-**Input utan fokus.** Tangenttryck via Windows går till det fönster som har fokus, och det fungerar därför inte. I stället pekar `take_control()` om spelets alla läsningar av joystick och eldknapp till två brevlådor i oanvänd chip-RAM (68000-användarvektorerna):
+**Input without focus.** Key presses through Windows go to the window that has focus, so they do not work. Instead `take_control()` redirects all of the game's reads of the joystick and the fire button to two mailboxes in unused chip RAM (the 68000 user vectors):
 
-| Instruktion i `ns` | Ställen | Brevlåda |
+| Instruction in `ns` | Places | Mailbox |
 |---|---|---|
-| `move.w $DFF00C.l,Dn` (JOY1DAT) | `$235E`, `$2618` | `$3F0` (word, JOY1DAT-kodning) |
-| `btst #7,$BFE001.l` (eldknapp port 2) | `$140`, `$15C`, `$178`, `$238E`, `$282C`, `$67C4`, `$681E`, `$68A2`, `$760E` | `$3F4` (bit 7, 0 = nedtryckt) |
+| `move.w $DFF00C.l,Dn` (JOY1DAT) | `$235E`, `$2618` | `$3F0` (word, JOY1DAT encoding) |
+| `btst #7,$BFE001.l` (fire button, port 2) | `$140`, `$15C`, `$178`, `$238E`, `$282C`, `$67C4`, `$681E`, `$68A2`, `$760E` | `$3F4` (bit 7, 0 = pressed) |
 
-Instruktionerna behåller opkod och längd, och bara adressfältet byts. Spelets logik påverkas alltså inte. `release_control()` återställer originalbytes. Görs alltid före ett savestate, så att det sparade spelet går att spela med vanlig joystick. `set_input(dirs, fire)` och `hold(dirs, fire, seconds)` skriver brevlådorna.
+The instructions keep their opcode and length, and only the address field is changed. The game's logic is therefore not affected. `release_control()` restores the original bytes. This is always done before a savestate, so that the saved game can be played with a normal joystick. `set_input(dirs, fire)` and `hold(dirs, fire, seconds)` write the mailboxes.
 
-**I spelläge.** Inputrutinen `$235C` skriver varje bildruta en nollskild riktningsmask till `$23CA` (bit 0 ingen riktning, 1 upp, 2 höger, 3 ned, 4 vänster, 5 fire). Filens värde är 0, så `$23CA != 0` betyder att spelet har startat.
+**In game.** The input routine `$235C` writes a non-zero direction mask to `$23CA` every frame (bit 0 no direction, 1 up, 2 right, 3 down, 4 left, 5 fire). The value in the file is 0, so `$23CA != 0` means that the game has started.
 
-**Skärmbilder.** `PrintWindow` på emulatorfönstret. Med Direct3D blir bilden svart när fönstret saknar fokus, och därför används `gfx_api=gdi`.
+**Screenshots.** `PrintWindow` on the emulator window. With Direct3D the picture goes black when the window has no focus, and that is why `gfx_api=gdi` is used.
 
-## Exempel
+## Example
 
 ```python
 import sys; sys.path.insert(0, "tools/uae")
@@ -49,22 +49,22 @@ u.wait_hunk(30)
 u.take_control()
 x0 = u.word(0x8F56)
 u.hold(["left"], seconds=1.5)
-print("vyn flyttades", x0 - u.word(0x8F56), "pixlar")
+print("the view moved", x0 - u.word(0x8F56), "pixels")
 u.screenshot("assets-local/uae/shots/test.png")
 u.release_control()
 u.kill()
 ```
 
-## Skriptspår
+## Script traces
 
-`py tools/uae/capture_script.py <riktning> <sek> [förflyttning] > assets-local/uae/trace_<namn>.json` startar från savestatet och kör först förflyttningen (t.ex. `right:2.5,left:0.15`). När gubben har stått still i 1,5 s sparas startläget (plats 0 och motorns variabler), och därefter hålls riktningen medan varje ändring av skriptposition, bilder, dx och vy spelas in. `pkg/game/script/trace_test.go` kör alla `trace_*.json` mot Go-motorn.
+`py tools/uae/capture_script.py <direction> <seconds> [movement] > assets-local/uae/trace_<name>.json` starts from the savestate and first runs the movement (for example `right:2.5,left:0.15`). When the player has stood still for 1.5 s the starting state is saved (slot 0 and the engine's variables), and then the direction is held while every change of script position, pictures, dx and view y is recorded. `pkg/game/script/trace_test.go` runs all `trace_*.json` against the Go engine.
 
-Fiender skjuter: på våningen ovanför trappan vid bron blir gubben skjuten om han går vänster en stund (skript `$4F2E`). Undvik det i förflyttningar tills fienderna är portade.
+Enemies shoot: on the floor above the stairs by the bridge the player is shot if he walks left for a while (script `$4F2E`). Avoid that in movements until the enemies are ported.
 
-En walkthrough (rutt genom hela banan, tredjepartstext) ligger lokalt i `assets-local/walkthrough/`.
+A walkthrough (a route through the whole level, third-party text) can be kept locally in `assets-local/walkthrough/`.
 
-## Begränsningar och nästa steg
+## Limitations and next steps
 
-- Tidsupplösningen för input är Python-sömn (millisekunder), inte bildrutor. För bildruteexakta tester behövs synk mot spelets VBlank, t.ex. genom att läsa en räknare som spelet ökar varje bildruta. Den är inte hittad ännu.
-- Tangentbordskommandon i spelet (om sådana finns) går inte via brevlådorna.
-- Ljudet är avstängt i konfigurationen.
+- The time resolution of input is Python sleep (milliseconds), not frames. For frame-exact tests the game's VBlank has to be synchronised, for example by reading a counter that the game increments every frame. That has not been found yet.
+- Keyboard commands in the game (if there are any) do not go through the mailboxes.
+- The sound is switched off in the configuration.

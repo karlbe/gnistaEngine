@@ -98,5 +98,6 @@ on. Neither contains any game data.
 
 ## Licence
 
-No licence has been chosen yet. The original game is not covered by anything in this repository.
-Third-party libraries and their licences are listed in `NOTICE`.
+GnistaEngine is licensed under the [Apache License, Version 2.0](LICENSE). The original game is not
+covered by this licence, or by anything else in this repository. Third-party libraries and their
+licences are listed in `NOTICE`.

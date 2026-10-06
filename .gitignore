@@ -1,0 +1,19 @@
+# The original game's files and anything made from them stay on your machine
+assets-local/
+*.adf
+*.zip
+*.uss
+
+# Build output
+dist/
+*.exe
+
+# Python
+__pycache__/
+*.pyc
+
+# Editors
+.vscode/
+
+# Loose screenshots in the top directory (they would show the original game)
+/*.png

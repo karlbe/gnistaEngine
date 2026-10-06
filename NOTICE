@@ -1,0 +1,16 @@
+GnistaEngine uses these libraries. Each has its own licence, which you can read in the library's
+repository or in your Go module cache; the main ones are
+
+  github.com/hajimehoshi/ebiten/v2   Apache License 2.0
+  github.com/ebitengine/oto/v3       Apache License 2.0
+  github.com/ebitengine/purego       Apache License 2.0
+  github.com/ebitengine/hideconsole  Apache License 2.0
+  github.com/ebitengine/gomobile     BSD 3-Clause
+  github.com/jfreymuth/pulse         MIT (used on Linux)
+  golang.org/x/sys, golang.org/x/sync  BSD 3-Clause (Copyright The Go Authors)
+
+go.mod and go.sum list everything with versions. Programs built from this source include code from
+these libraries and are subject to their licences.
+
+The game that the engine plays, Persian Gulf Inferno, is not part of this repository and is not
+covered by any licence given here.

@@ -7,11 +7,16 @@ game *Persian Gulf Inferno* (Innerprise, 1989) from your own copy of its disk. I
 at the original's 50 Hz and plays the original's graphics, sound and music. It can also run your own
 game from a *pack*: your own pictures, map, sounds, music and scripts.
 
-**This repository contains none of the game's data, and it is not affiliated with or endorsed by
-the game's authors or rights holders.** The engine reads the original files from a disk image that
-you provide, and a tool in this repository prepares them for you. The game, its graphics, sounds and
-music belong to their rights holders. Nothing of it is distributed here, and the tools are not meant
-to be used with a copy you have no right to.
+![A shootout in the original game, run by the engine](docs/images/shootout.png)
+
+*A shootout on floor 7, run by the engine from a real disk image. The picture is the original
+game's artwork, shown here only to illustrate what the engine does; it belongs to its rights holders.*
+
+**Apart from that one screenshot, this repository contains none of the game's data, and it is not
+affiliated with or endorsed by the game's authors or rights holders.** The engine reads the original
+files from a disk image that you provide, and a tool in this repository prepares them for you. The
+game, its graphics, sounds and music belong to their rights holders. Nothing else of it is
+distributed here, and the tools are not meant to be used with a copy you have no right to.
 
 ## Quick start
 
